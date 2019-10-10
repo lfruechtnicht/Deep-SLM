@@ -1,5 +1,7 @@
 import numpy as np
 import numbers
+from scipy.stats import truncnorm
+
 
 def check_random_state(seed):
     """Turn seed into a np.random.RandomState instance
@@ -21,3 +23,9 @@ def check_random_state(seed):
         return seed
     raise ValueError('%r cannot be used to seed a numpy.random.RandomState'
                      ' instance' % seed)
+
+
+def get_truncated_normal(mean=1, sd=1.5, low=1, upp=10):
+    X = truncnorm((low - mean) / sd, (upp - mean) / sd, loc=mean, scale=sd)
+
+    int(X.rvs(1))
