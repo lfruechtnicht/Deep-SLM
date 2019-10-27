@@ -1,3 +1,4 @@
+tensorflow
 keras
 appnope==0.1.0
 attrs==19.1.0

@@ -1,0 +1,33 @@
+from NeuralNetwork import NeuralNetwork
+from keras.datasets import cifar10
+from tensorflow import keras
+from keras.preprocessing.image import ImageDataGenerator
+import numpy as np
+
+(x_train, y_train), (x_test, y_test) = cifar10.load_data()
+num_classes = 10
+num_predictions = 20
+
+y_train = keras.utils.to_categorical(y_train, num_classes)
+y_test = keras.utils.to_categorical(y_test, num_classes)
+
+x_train = x_train.astype('float32')
+x_test = x_test.astype('float32')
+x_train /= 255
+x_test /= 255
+
+x_test.shape
+
+Network = NeuralNetwork(input_shape=(32, 32, 3), n_outputs=10, seed=0, x=x_test)
+Network_b = NeuralNetwork(input_shape=(32, 32, 3), n_outputs=10, seed=0, x=x_test)
+# todo check for randomness as models are not the same
+
+# opt = keras.optimizers.RMSprop(learning_rate=0.0001, decay=1e-6)
+# Network.model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
+x = x_test
+
+print(id(x))
+print(x.shape)
+print(id(Network.x))
+print(id(Network_b.x))
+print(Network_b.x is Network.x)
