@@ -1,6 +1,7 @@
 from NeuralNetwork import NeuralNetwork
 from keras.datasets import cifar10
 from tensorflow import keras
+from sys import getsizeof
 from keras.preprocessing.image import ImageDataGenerator
 import numpy as np
 
@@ -18,9 +19,7 @@ x_test /= 255
 
 x_test.shape
 
-Network = NeuralNetwork(input_shape=(32, 32, 3), n_outputs=10, seed=0, x=x_test)
-Network_b = NeuralNetwork(input_shape=(32, 32, 3), n_outputs=10, seed=0, x=x_test)
-# todo check for randomness as models are not the same
+Network = NeuralNetwork(input_shape=(32, 32, 3), n_outputs=10, seed=5, x=x_test)
 
 # opt = keras.optimizers.RMSprop(learning_rate=0.0001, decay=1e-6)
 # Network.model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
@@ -29,5 +28,7 @@ x = x_test
 print(id(x))
 print(x.shape)
 print(id(Network.x))
-print(id(Network_b.x))
-print(Network_b.x is Network.x)
+print(Network.summary())
+print(Network.model.predict(x).shape)
+Network.get_semantics_nodes(x)
+print(Network.cl_layers[0].semantics.nbytes/(1.E6))

@@ -1,6 +1,7 @@
 import sys
 from tensorflow import keras
 from utils import check_random_state
+import uuid
 
 # layer parameters
 
@@ -16,10 +17,17 @@ activations = ["softmax",
                "exponential",
                "linear",
                ]
-strides = [(2, 2), (1, 1)]
+strides = [(3, 3)#,
+           #(2, 2),
+           #(1, 1)
+           ]
 filters = list(range(50))
-kernel_size = [(5, 5), (3, 3)]
-padding = ["valid", "same"]
+kernel_size = [(5, 5)#,
+               #(3, 3),
+               #(1, 1)
+               ]
+padding = ["valid",
+           "same"]
 pool_size = [(1, 1), (2, 2)]
 
 
@@ -29,6 +37,8 @@ class Node(object):
      """
 
     def __init__(self,
+                 initial_input_node,
+                 tmpdir,
                  input_node=None,
                  is_input_node=False,
                  computational_layer=None,
@@ -36,6 +46,8 @@ class Node(object):
                  seed=None
                  ):
 
+        self.root_tmpdir = tmpdir
+        self.initial_input_node = initial_input_node
         self.input_node = input_node
         self.computational_layer = computational_layer
         self.is_input_node = is_input_node
@@ -45,10 +57,14 @@ class Node(object):
         self.depth = 1  # depending on computational_layer is = to previous or plus one
         self.random_state = check_random_state(seed)
         self._eval()
+        if not self.is_input_node:
+            self._tmpdir = # todo
         self._input_node_output_shape()
         if self.computational_layer is None:
             self._get_random_layer()
         self._connect_with_input()
+        self.model = None
+        self.semantics = None
 
     def _eval(self):
         """Evaluates the Node. Either it is an Input Node and has no Input Nodes or it has input nodes and is no Input
@@ -88,15 +104,21 @@ class Node(object):
             self.output_shape = self.computational_layer.shape
             self.depth = max(_depths)
 
+    def only_flatten_test(self):
+        if self.output_shape[1] < 5 or self.output_shape[2] < 5:
+            out = True
+        else:
+            out = False
+        return out
+
     def _get_random_layer(self):
 
         _seed = self.random_state.randint(sys.maxsize)
         kernel_initializer = self.random_state.choice([keras.initializers.RandomNormal(seed=_seed),
                                                        keras.initializers.RandomUniform(seed=_seed)])
 
-
         if self.cl:
-            # todo initalize with seed!
+            # todo irandom state instance test! This sysmax is absurd!
             _layer = self.random_state.choice([0, 1])
             _strides = strides[self.random_state.choice(len(strides))]
             _padding = self.random_state.choice(padding)
@@ -126,17 +148,37 @@ class Node(object):
                                                    padding=_padding)
             self.computational_layer = layer
 
+    def _get_intermediate_model(self):
+        if not self.is_input_node:
+            self.model = keras.models.Model(inputs=self.initial_input_node.computational_layer,
+                                            outputs=self.computational_layer)
+        else:
+            pass
+
+    def get_semantics(self, data):
+        if not self.is_input_node:
+            self._get_intermediate_model()
+            self.semantics = self.model.predict(data)
+            del self.model
+        else:
+            self.semantics = data
+
+
+
+
+
+
+
+
 
 if __name__ == '__main__':
     B = 1
     # A = Node(input_node=B)
-    C = Node(is_input_node=True, computational_layer=keras.Input(shape=(32, 32, 3)))
-    D = Node(input_node=C, computational_layer=keras.layers.Flatten())
-    E = Node(input_node=C, computational_layer=keras.layers.Flatten())
-    _inputs = [node.computational_layer for node in [D, E]]
-    F = Node(input_node=[D, E], computational_layer=keras.layers.concatenate(inputs=_inputs))
-    S = Node(input_node=C, computational_layer=None, seed=0)
+    X = Node(is_input_node=True, computational_layer=keras.Input(shape=(5, 5, 3)))
+    print(X.only_flatten_test())
+    X = Node(input_node=X, computational_layer=None, seed=41)
+    print(X.only_flatten_test())
+    #X = Node(input_node=X, computational_layer=None, seed=32)
+    print(X.only_flatten_test())
 
-    print(D.output_shape.ndims > 2)
-    print(C.output_shape)
-    print(D.computational_layer)
+
