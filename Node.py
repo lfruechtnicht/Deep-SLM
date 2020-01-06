@@ -38,7 +38,6 @@ class Node(object):
 
     def __init__(self,
                  initial_input_node,
-                 tmpdir,
                  input_node=None,
                  is_input_node=False,
                  computational_layer=None,
@@ -46,7 +45,6 @@ class Node(object):
                  seed=None
                  ):
 
-        self.root_tmpdir = tmpdir
         self.initial_input_node = initial_input_node
         self.input_node = input_node
         self.computational_layer = computational_layer
@@ -57,8 +55,6 @@ class Node(object):
         self.depth = 1  # depending on computational_layer is = to previous or plus one
         self.random_state = check_random_state(seed)
         self._eval()
-        if not self.is_input_node:
-            self._tmpdir = # todo
         self._input_node_output_shape()
         if self.computational_layer is None:
             self._get_random_layer()
@@ -118,7 +114,7 @@ class Node(object):
                                                        keras.initializers.RandomUniform(seed=_seed)])
 
         if self.cl:
-            # todo irandom state instance test! This sysmax is absurd!
+            # todo i random state instance test! This sysmax is absurd!
             _layer = self.random_state.choice([0, 1])
             _strides = strides[self.random_state.choice(len(strides))]
             _padding = self.random_state.choice(padding)
@@ -148,17 +144,14 @@ class Node(object):
                                                    padding=_padding)
             self.computational_layer = layer
 
-    def _get_intermediate_model(self):
+    def _get_semantics(self, data):
         if not self.is_input_node:
-            self.model = keras.models.Model(inputs=self.initial_input_node.computational_layer,
+            self.model = keras.models.Model(inputs=keras.Input(shape=self.input_node.output_shape),
                                             outputs=self.computational_layer)
-        else:
-            pass
-
-    def get_semantics(self, data):
-        if not self.is_input_node:
-            self._get_intermediate_model()
-            self.semantics = self.model.predict(data)
+            if not self.input_node.is_input_node:
+                self.semantics = self.model.predict(self.input_node.semantics)
+            else:
+                self.semantics = self.model.predict(data)
             del self.model
         else:
             self.semantics = data

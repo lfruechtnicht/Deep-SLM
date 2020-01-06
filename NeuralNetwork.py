@@ -40,13 +40,6 @@ class NeuralNetwork(object):
         self.build_ff()
         self._get_model()
 
-
-
-        # todo data generator for everything!
-
-        # todo mutation of adding only neurons
-        # todo for mutation the next node must have a input node before!
-
     def _eval(self):
         """Text"""
         if not isinstance(self.input_shape, tuple):  # can also be list of nodes
@@ -63,7 +56,7 @@ class NeuralNetwork(object):
         # 1 define the input node
         self.initial_input_node = Node(initial_input_node=self.initial_input_node,
                                        is_input_node=True,
-                                       computational_layer=keras.Input(shape=self.input_shape))
+                                       computational_layer=keras.Input(shape=self.input_shape)) # todo can i pass the data into the input node - that would be nice
         # 2 add subsequent nodes
         _building_cl, _nodes_wo_connection = True, [self.initial_input_node]
         while _building_cl:
@@ -196,8 +189,7 @@ class NeuralNetwork(object):
     def get_semantics_network(self, data):
         self.semantics = self.model.predict(data)
 
-    def del_data(self):
-        self._tmpdir.cleanup()
+
 
 
 
