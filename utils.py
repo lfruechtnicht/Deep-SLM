@@ -1,6 +1,8 @@
 import numpy as np
 import numbers
 from scipy.stats import truncnorm
+import collections
+
 
 
 def check_random_state(seed):
@@ -29,3 +31,23 @@ def get_truncated_normal(mean=0.5, sd=1.5, low=0.5, upp=10):
     X = truncnorm((low - mean) / sd, (upp - mean) / sd, loc=mean, scale=sd)
 
     int(X.rvs(1))
+
+def cross_entropy(predictions, targets, epsilon=1e-12):
+    """
+    Computes cross entropy between targets (encoded as one-hot vectors)
+    and predictions.
+    Input: predictions (N, k) ndarray
+           targets (N, k) ndarray
+    Returns: scalar
+    """
+    predictions = np.clip(predictions, epsilon, 1. - epsilon)
+    N = predictions.shape[0]
+    ce = -np.sum(targets*np.log(predictions+1e-9))/N
+    return ce
+
+
+def flatten(x):
+    if isinstance(x, list):
+        return [a for i in x for a in flatten(i)]
+    else:
+        return [x]

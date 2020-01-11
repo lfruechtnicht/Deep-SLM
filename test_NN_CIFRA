@@ -19,16 +19,31 @@ x_test /= 255
 
 x_test.shape
 
-Network = NeuralNetwork(input_shape=(32, 32, 3), n_outputs=10, seed=5, x=x_test)
+Network = NeuralNetwork(input_shape=(32, 32, 3), n_outputs=10, seed=5, x_train=x_train, y_train=y_train)
 
 # opt = keras.optimizers.RMSprop(learning_rate=0.0001, decay=1e-6)
 # Network.model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
 x = x_test
+print(Network.semantics_size)
+Network.single_filter_mutation()
+print(Network.semantics_size)
+Network.single_filter_mutation()
+print(Network.semantics_size)
+Network.single_filter_mutation()
+print(Network.semantics_size)
+Network.single_filter_mutation()
+print(Network.semantics_size)
+Network.single_filter_mutation()
+print(Network.semantics_size)
+Network.single_filter_mutation()
+print(Network.semantics_size)
+Network.single_filter_mutation()
+print(Network.semantics_size)
 
-print(id(x))
-print(x.shape)
-print(id(Network.x))
-print(Network.summary())
-print(Network.model.predict(x).shape)
-Network.get_semantics_nodes(x)
-print(Network.cl_layers[0].semantics.nbytes/(1.E6))
+#print(x.nbytes / 1.E6)
+#print(id(x))
+#print(x.shape)
+#print(id(Network.x_train))
+#print(id(Network.initial_input_node.semantics))
+
+
