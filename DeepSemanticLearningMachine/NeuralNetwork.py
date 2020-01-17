@@ -1,47 +1,112 @@
 from tensorflow import keras
-from Node import Node
+from tensorflow.keras.models import Model
+from DeepSemanticLearningMachine.Node import Node
 from utils import *
 import sys
-import tempfile
+from copy import copy
 
 
-class NeuralNetwork(object):
+class NeuralNetwork(object):  # todo inheret from individual
     """A neural network object consists of  an input Nodes, intermediate Nodes and an output Node. Together they form
     the model which is a Keras computational model."""
 
-    def __init__(self, input_shape, n_outputs, seed=None, max_depth_cl=20, max_width_cl=1, max_depth_ff=3,
-                 max_splits=3, x_train=None, y_train=None):
+    def __init__(self,
+                 x_train,
+                 y_train,
+                 input_shape, n_outputs,
+                 seed=None,
+                 x_test=None,
+                 max_depth_cl=20,
+                 max_width_cl=1,
+                 max_depth_ff=3,
+                 max_width_ff=1,
+                 max_splits=3,
+                 mutation_level=0,
+                 output_node=None,
+                 model=None,
+                 semantics=None,
+                 semantics_size=0,
+                 _width=1,
+                 initial_input_node=None,
+                 layers=None):# todo add real metric
 
-        # self._tmpdir = tempfile.TemporaryDirectory()
-        # self._tmpdir_name = self._tmpdir.name
+        self.random_state = check_random_state(seed)
+        self.input_shape = input_shape
+        self.n_outputs = n_outputs
 
         self.max_depth_cl = max_depth_cl
         self.max_width_cl = max_width_cl
         self.max_depth_ff = max_depth_ff
+        self.max_width_ff = max_width_ff
         self.max_splits = max_splits
-        self.seed_range_cl = self.max_depth_cl * self.max_width_cl
-        self.seed_range_ff = self.max_depth_ff
-        self.input_shape = input_shape
-        self.mutation_level = 0
-        self.input_nodes = {self.mutation_level: [[Node(mutation_level=self.mutation_level,
-                                                        is_input_node=True,
-                                                        computational_layer=keras.Input(shape=self.input_shape),
-                                                        input_shape=self.input_shape)]]}
-        self.initial_input_node = self.input_nodes[0][0][0]
-        self.layers = {self.mutation_level: []}
-        self.output_node = None
-        self.n_outputs = n_outputs
-        self.model = None
-        self.semantics = None
-        self.semantics_size = 0
-        self.random_state = check_random_state(seed)
-        self._width = 1
+        self.mutation_level = mutation_level
         self.x_train = x_train
         self.y_train = y_train
-        self._eval()
-        self.initialize_network()
+        self.x_test = x_test
+        self.output_node = output_node
+        self.model = model
+        self.semantics = semantics
+        self.semantics_size = semantics_size
+        self._width = _width
 
-        # self._get_model()
+        self.fitness = None
+        self._eval()
+
+        self.initial_input_node = initial_input_node
+        self.layers = layers
+        if self.initial_input_node is None:
+            self.initial_input_node = Node(mutation_level=self.mutation_level,
+                                           is_input_node=True,
+                                           _computational_layer=keras.Input(shape=self.input_shape),
+                                           input_shape=self.input_shape)
+            self.layers = {self.mutation_level: []}
+            self.initialize_network()
+
+    def __repr__(self):
+        return str(f"NeuralNetwork, Fitness: {self.fitness}, Mutations: {self.mutation_level}")
+
+    def __copy__(self):
+        return self._copy()
+
+    def copy(self):
+        return self._copy()
+
+    def _copy(self):
+
+        seed = self.random_state
+        input_shape = self.input_shape
+        n_outputs = self.n_outputs
+        max_depth_cl = self.max_depth_cl
+        max_width_cl = self.max_width_cl
+        max_depth_ff = self.max_depth_ff
+        max_width_ff = self.max_width_ff
+        max_splits = self.max_splits
+        mutation_level = self.mutation_level
+        x_train = self.x_train
+        y_train = self.y_train
+        x_test = self.x_test
+        output_node = self.output_node
+        semantics = self.semantics
+        semantics_size = self.semantics_size
+        initial_input_node = self.initial_input_node
+        layers = self.layers.copy()
+        return NeuralNetwork(seed=seed,
+                             input_shape=input_shape,
+                             n_outputs=n_outputs,
+                             max_depth_cl=max_depth_cl,
+                             max_width_cl=max_width_cl,
+                             max_depth_ff=max_depth_ff,
+                             max_width_ff=max_width_ff,
+                             max_splits=max_splits,
+                             mutation_level=mutation_level,
+                             x_train=x_train,
+                             y_train=y_train,
+                             x_test=x_test,
+                             output_node=output_node,
+                             semantics=semantics,
+                             semantics_size=semantics_size,
+                             initial_input_node=initial_input_node,
+                             layers=layers)
 
     def _eval(self):
         """Text"""
@@ -58,9 +123,12 @@ class NeuralNetwork(object):
 
         self.build_random_layers(self.initial_input_node)
         self.get_semantics_initial_nodes()
+        self.semantics = self.output_node.semantics
+        self.fitness = self._evaluate()
         self.mutation_level += 1
 
-    def build_random_layers(self, starting_node, concatenation_restricted=False): # todo fine tune mutation input and concatenation and splits
+    def build_random_layers(self, starting_node,
+                            concatenation_restricted=False):  # todo fine tune mutation input and concatenation and splits
         # 2 add subsequent nodes
         building_cl, nodes_wo_connection = True, [starting_node]
         while building_cl:
@@ -72,7 +140,7 @@ class NeuralNetwork(object):
             if only_flatten:
                 self.layers[self.mutation_level].append(Node(mutation_level=self.mutation_level,
                                                              input_node=to_connect_with_node,
-                                                             computational_layer=keras.layers.Flatten()))
+                                                             _computational_layer=keras.layers.Flatten()))
             else:
                 no_splitting = self._width >= self.max_width_cl
 
@@ -92,7 +160,7 @@ class NeuralNetwork(object):
         if len(nodes_wo_connection) > 1:
             self.layers[self.mutation_level].append(Node(mutation_level=self.mutation_level,
                                                          input_node=nodes_wo_connection,
-                                                         computational_layer=keras.layers.Concatenate()))
+                                                         _computational_layer=keras.layers.Concatenate()))
 
         self.build_ff()
 
@@ -111,8 +179,8 @@ class NeuralNetwork(object):
             cl = self.random_state.choice([keras.layers.Flatten(), None])
             self.layers[self.mutation_level].append(Node(mutation_level=self.mutation_level,
                                                          input_node=to_connect_with_node,
-                                                         computational_layer=cl,
-                                                         seed=self.random_state.randint(self.seed_range_cl)))
+                                                         _computational_layer=cl,
+                                                         seed=self.random_state))
         else:
             # a node can be concatenated if it has the same shape
             all_cl_nodes = self.get_all_nodes()
@@ -133,8 +201,8 @@ class NeuralNetwork(object):
                 cl = self.random_state.choice([keras.layers.Flatten(), None])
                 self.layers[self.mutation_level].append(Node(mutation_level=self.mutation_level,
                                                              input_node=to_connect_with_node,
-                                                             computational_layer=cl,
-                                                             seed=self.random_state.randint(self.seed_range_cl)))
+                                                             _computational_layer=cl,
+                                                             seed=self.random_state))
 
             # case 2
             elif concat_possible:
@@ -157,16 +225,14 @@ class NeuralNetwork(object):
 
                     self.layers[self.mutation_level].append(Node(mutation_level=self.mutation_level,
                                                                  input_node=to_connect_with_node,
-                                                                 computational_layer=cl,
-                                                                 seed=self.random_state.randint(self.seed_range_cl)))
+                                                                 _computational_layer=cl,
+                                                                 seed=self.random_state))
                 else:
                     self.layers[self.mutation_level].append(Node(mutation_level=self.mutation_level,
                                                                  input_node=to_connect_with_node,
-                                                                 computational_layer=cl,
-                                                                 seed=self.random_state.randint(self.seed_range_cl)))
+                                                                 _computational_layer=cl,
+                                                                 seed=self.random_state))
                     self._width += 1  # todo is this correct ??
-
-
 
     def get_semantics_initial_nodes(self):
 
@@ -174,18 +240,21 @@ class NeuralNetwork(object):
         output_nodes_semantics = [node.computational_layer for node in self.layers[self.mutation_level]]
         model_for_semantics = keras.models.Model(inputs=input_node, outputs=output_nodes_semantics)
         semantics = model_for_semantics.predict(self.x_train)
-        self.semantics_size += sum([sem.nbytes for sem in semantics])/1.E6
+        self.semantics_size += sum([sem.nbytes for sem in semantics]) / 1.E6
         [setattr(self.layers[self.mutation_level][idx], 'semantics', i) for idx, i in enumerate(semantics)]
+        self.initial_input_node.semantics = self.x_train
 
-    def single_filter_mutation(self):
+
+    def single_mutation(self):
 
         self.layers[self.mutation_level] = []
         mutation_node = self.random_mutation_node()
         self.build_random_layers(starting_node=mutation_node, concatenation_restricted=True)
         self.get_semantics_mutation_nodes()
         self.mutation_level += 1
-
-        self.semantics = self.output_node.semantics  # ?
+        self.semantics = self.output_node.semantics
+        self.fitness = self._evaluate()
+        return self
 
     def get_semantic_inputs(self):  # todo
         """searches if any node in the current mutation level has inputs from previous semantics and returns a tuple of
@@ -195,12 +264,13 @@ class NeuralNetwork(object):
         semantic_data = flatten([node.input_data for node in self.layers[self.mutation_level] if node.semantic_input])
         return semantic_input_nodes, semantic_data
 
-    def get_semantics_mutation_nodes(self): # todo
+    def get_semantics_mutation_nodes(self):  # todo
         semantic_input_nodes, semantic_data = self.get_semantic_inputs()
         output_nodes_semantics = [node.semantics_computational_layer for node in self.layers[self.mutation_level]]
-        model_for_semantics = keras.models.Model(inputs=semantic_input_nodes, outputs=output_nodes_semantics)  # something is wrong here
+        model_for_semantics = keras.models.Model(inputs=semantic_input_nodes,
+                                                 outputs=output_nodes_semantics)  # something is wrong here
         semantics = model_for_semantics.predict(semantic_data)
-        self.semantics_size += sum([sem.nbytes for sem in semantics])/1.E6
+        self.semantics_size += sum([sem.nbytes for sem in semantics]) / 1.E6
         [setattr(self.layers[self.mutation_level][idx], 'semantics', i) for idx, i in enumerate(semantics)]
 
     def random_mutation_node(self):  # todo redo
@@ -209,7 +279,9 @@ class NeuralNetwork(object):
         return mutation_node
 
     def get_all_nodes(self):
-        return [item for sublist in self.layers.values() for item in sublist]
+        all_nodes = [item for sublist in self.layers.values() for item in sublist]
+        all_nodes.append(self.initial_input_node)
+        return all_nodes
 
     def _get_model(self):
         self.model = keras.models.Model(inputs=self.initial_input_node.computational_layer,
@@ -221,14 +293,14 @@ class NeuralNetwork(object):
         kernel_initializer = keras.initializers.RandomNormal(seed=self.random_state.randint(sys.maxsize))
         self.layers[self.mutation_level].append(Node(mutation_level=self.mutation_level,
                                                      input_node=self.layers[self.mutation_level][-1],
-                                                     computational_layer=keras.layers.Dense(
+                                                     _computational_layer=keras.layers.Dense(
                                                          20,
                                                          activation='relu',
                                                          kernel_initializer=kernel_initializer)))
 
         self.layers[self.mutation_level].append(Node(mutation_level=self.mutation_level,
                                                      input_node=self.layers[self.mutation_level][-1],
-                                                     computational_layer=keras.layers.Dense(
+                                                     _computational_layer=keras.layers.Dense(
                                                          self.n_outputs,
                                                          activation=None,
                                                          kernel_initializer=kernel_initializer)))
@@ -238,16 +310,24 @@ class NeuralNetwork(object):
             last_nodes = self.get_last_nodes()
             self.layers[self.mutation_level].append(Node(mutation_level=self.mutation_level,
                                                          input_node=last_nodes,
-                                                         computational_layer=keras.layers.Add(),
+                                                         _computational_layer=keras.layers.Add(), # maybe also using average or something else?
                                                          seed=0))
 
             self.output_node = self.layers[self.mutation_level][-1]
+        self._set_model()
 
     def get_last_nodes(self):
         return [sublist[-1] for sublist in self.layers.values()]
 
-    def evaluate(self):
+    def _evaluate(self):
         return cross_entropy(predictions=self.semantics, targets=self.y_train)
+
+    def _set_model(self):
+        self.model = Model(inputs=self.initial_input_node.computational_layer,
+                           outputs=self.output_node.computational_layer)
+
+    def predict(self, data):
+        return self.model.predict(data)
 
 
 if __name__ == '__main__':

@@ -1,6 +1,8 @@
 import sys
 from tensorflow import keras
 from utils import check_random_state
+import numpy as np
+
 import uuid
 
 # layer parameters
@@ -17,14 +19,14 @@ activations = ["softmax",
                "exponential",
                "linear",
                ]
-strides = [(3, 3)  # ,
-           # (2, 2),
-           # (1, 1)
+strides = [(3, 3),
+           (2, 2),
+           (1, 1)
            ]
-filters = list(range(50))
-kernel_size = [(5, 5)  # ,
-               # (3, 3),
-               # (1, 1)
+filters = list(range(10))
+kernel_size = [(5, 5),
+               (3, 3),
+               (1, 1)
                ]
 padding = ["valid",
            "same"]
@@ -40,56 +42,80 @@ class Node(object):
 
     def __init__(self,
                  mutation_level,
-                 input_node=None,
                  is_input_node=False,
-                 computational_layer=None,
+                 _computational_layer=None,
                  cl=True,
                  seed=None,
-                 input_shape=None
+                 input_shape=None,
+                 semantics=None,
+                 input_data=None,
+                 semantic_input=False,
+                 semantic_input_node=None,
+                 computational_layer=None,
+                 semantics_computational_layer=None,
+                 input_node=None,
+                 depth=1
                  ):
+
         self.mutation_level = mutation_level
         self.input_node = input_node
-        self._computational_layer = computational_layer
-        self.computational_layer = None
+        self._computational_layer = _computational_layer
+        self.computational_layer = computational_layer
         self.is_input_node = is_input_node
         self.cl = cl
         self.input_shape = input_shape
         self.output_shape = None
         self.out_connections = []
-        self.depth = 1  # depending on computational_layer is = to previous or plus one
+        self.depth = depth  # depending on computational_layer is = to previous or plus one
         self.random_state = check_random_state(seed)
-        self._eval()
-        self.semantic_input = False
-        self.semantic_input_node = None
-        self.input_data = None
-        self.semantics_computational_layer = None
+        self.semantics = semantics
+        self.semantic_input = semantic_input
+        self.semantic_input_node = semantic_input_node
+        self.input_data = input_data
+        self.semantics_computational_layer = semantics_computational_layer
         if self._computational_layer is None:
             self._get_random_layer()
-        self.set_computational_layer()
+        if semantics is None:
+            self.set_computational_layer()
         self._input_node_output_shape()
 
-    def _eval(self):
-        """Evaluates the Node. Either it is an Input Node and has no Input Nodes or it has input nodes and is no Input
-        Node. Moreover, a Input Node must be of type Node.
-        Throws ValueError: A node can only be Input Node or have an Input Node! or ValueError: A Input Node must be a
-        of type Node."""
-        if not self.is_input_node and self.input_node is None:  # can also be list of nodes
-            raise ValueError("A node can only be Input Node or have an Input Node or Input Nodes!")
-        if not self.is_input_node and not isinstance(self.input_node, Node):
-            if not isinstance(self.input_node, list):
-                raise ValueError("""A Input Node can only be a list of Nodes for computational_layers of \n
-                                     keras.layers.concatenate""")
+    def __repr__(self):
+        return str(self.computational_layer)
 
-            for node in self.input_node:
-                if not isinstance(node, Node):
-                    raise ValueError("A Input Node must be a of type Node or a list with elements of type Node")
+    def __copy__(self):
+        is_input_node = self.is_input_node
+        cl = self.cl
+        computational_layer = self.computational_layer
+        random_state = self.random_state
+        depth = self.depth
+        semantics = self.semantics
+        mutation_level = self.mutation_level
+        semantic_input = self.semantic_input
+        semantic_input_node = self.semantic_input_node
+        input_data = self.input_data
+        semantics_computational_layer = self.semantics_computational_layer
+
+        return Node(is_input_node=is_input_node,
+                    cl=cl,
+                    computational_layer=computational_layer,
+                    seed=random_state,
+                    depth=depth,
+                    semantics=semantics,
+                    mutation_level=mutation_level,
+                    semantic_input=semantic_input,
+                    semantic_input_node=semantic_input_node,
+                    input_data=input_data,
+                    semantics_computational_layer=semantics_computational_layer)
+
+    def __deepcopy__(self, memodict={}):# todo?
+        pass
 
     def _input_node_output_shape(self):
         """sets the the output shape of an input node."""
         if self.is_input_node:
             self.output_shape = self.computational_layer.shape.dims
 
-    def set_computational_layer(self):
+    def set_computational_layer(self): # todo also no input node
         """Connects the current node with it's input node. This means setting the input of the computational_layer,
         setting a output connection for the input node and determining a output shape of the current node."""
 
@@ -213,36 +239,6 @@ class Node(object):
                                                    strides=_strides,
                                                    padding=_padding)
             self._computational_layer = layer
-
-    # def get_semantics(self, data):
-    #     if self.is_input_node:
-    #         self.semantics = data
-    #     elif self.semantics is None:
-    #         if isinstance(self.input_node, Node):
-    #             semantics_input = keras.Input(shape=self.input_node.output_shape[1:])
-    #             semantics_computational_layer = self._semantics_computational_layer(semantics_input)
-    #
-    #             self.model = keras.models.Model(inputs=semantics_input,
-    #                                             outputs=semantics_computational_layer)
-    #
-    #             self.semantics = self.model.predict(self.input_node.semantics)
-    #             del self.model, self._semantics_computational_layer
-    #
-    #         if isinstance(self.input_node, list):
-    #
-    #             semantics_input = [keras.Input(shape=node.output_shape[1:]) for node in self.input_node]
-    #
-    #             if self._computational_layer is "add":
-    #                 semantics_computational_layer = keras.layers.add(inputs=semantics_input)
-    #             elif self._computational_layer is "concatenate":
-    #                 semantics_computational_layer = keras.layers.concatenate(inputs=semantics_input)
-    #
-    #             self.model = keras.models.Model(inputs=semantics_input,
-    #                                             outputs=semantics_computational_layer)
-    #
-    #             input_semantics = [node.semantics for node in self.input_node]
-    #             self.semantics = self.model.predict(input_semantics)
-    #             del self.model
 
 
 if __name__ == '__main__':

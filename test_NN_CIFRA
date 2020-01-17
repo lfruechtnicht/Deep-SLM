@@ -1,9 +1,9 @@
-from NeuralNetwork import NeuralNetwork
-from keras.datasets import cifar10
+from DeepSemanticLearningMachine.NeuralNetwork import NeuralNetwork
+from tensorflow.keras.datasets import cifar10
 from tensorflow import keras
-from sys import getsizeof
-from keras.preprocessing.image import ImageDataGenerator
-import numpy as np
+from copy import copy
+
+
 
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 num_classes = 10
@@ -19,26 +19,29 @@ x_test /= 255
 
 x_test.shape
 
-Network = NeuralNetwork(input_shape=(32, 32, 3), n_outputs=10, seed=5, x_train=x_train, y_train=y_train)
+Network = NeuralNetwork(input_shape=(32, 32, 3), n_outputs=10, seed=5, x_train=x_train, y_train=y_train, x_test=x_test)
 
 # opt = keras.optimizers.RMSprop(learning_rate=0.0001, decay=1e-6)
 # Network.model.compile(loss='categorical_crossentropy', optimizer=opt, metrics=['accuracy'])
 x = x_test
-print(Network.semantics_size)
-Network.single_filter_mutation()
-print(Network.semantics_size)
-Network.single_filter_mutation()
-print(Network.semantics_size)
-Network.single_filter_mutation()
-print(Network.semantics_size)
-Network.single_filter_mutation()
-print(Network.semantics_size)
-Network.single_filter_mutation()
-print(Network.semantics_size)
-Network.single_filter_mutation()
-print(Network.semantics_size)
-Network.single_filter_mutation()
-print(Network.semantics_size)
+print(id(Network.x_test))
+Network2 = copy(Network)
+print(id(Network2.x_test))
+# #print(id(Network.copy().x_train))
+# Network.single_filter_mutation()
+# print(Network.semantics_size)
+# Network.single_filter_mutation()
+# print(Network.semantics_size)
+# Network.single_filter_mutation()
+# print(Network.semantics_size)
+# Network.single_filter_mutation()
+# print(Network.semantics_size)
+# Network.single_filter_mutation()
+# print(Network.semantics_size)
+# Network.single_filter_mutation()
+# print(Network.semantics_size)
+# Network.single_filter_mutation()
+# print(Network.semantics_size)
 
 #print(x.nbytes / 1.E6)
 #print(id(x))
