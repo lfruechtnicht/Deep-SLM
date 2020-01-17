@@ -25,7 +25,6 @@ class Hillclimbing():#todo ABC META
         return
 
     def _generate_neigbourhood(self):
-
         pass
 
 

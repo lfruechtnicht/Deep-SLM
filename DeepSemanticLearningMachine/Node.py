@@ -5,7 +5,7 @@ import numpy as np
 
 import uuid
 
-# layer parameters
+# layer parameters should propably also be parameters and be initialized a once to reduce amount of calling choice
 
 activations = ["softmax",
                "elu",
@@ -19,25 +19,38 @@ activations = ["softmax",
                "exponential",
                "linear",
                ]
-strides = [(3, 3),
-           (2, 2),
-           (1, 1)
+strides = [(3, 3)#,
+           #(2, 2),
+           #(1, 1)
            ]
-filters = list(range(10))
-kernel_size = [(5, 5),
-               (3, 3),
-               (1, 1)
+filters = list(range(1, 10))
+kernel_size = [(5, 5)#,
+               #(3, 3),
+               #(1, 1)
                ]
 padding = ["valid",
            "same"]
 pool_size = [(1, 1), (2, 2)]
 
 
-# todo initilaize all once that only one randome chioce has to be made!
 
 class Node(object):
     """A node/layer in the directed graph which represents a Neural Network.
-     Each node has exactly one input (except the input node) and at least one output node.
+     Attribute:
+     mutation_level: Int The number of mutation which is currently performed
+     is_input_node: Bool If this node is the initial input exposed to the raw data
+     _computational_layer tf.keras.layers Layer A reusable layer or none
+     cl Bool if this is a node of the convolutional part of the network (not used yet)
+     seed Int or RandomState instance
+     input_shape Tuple Specifies the input_shape for the input node
+     semantics np.array the saved output of the semantics_computational_layer
+     input_data np.array the semantics of the connected node
+     semantic_input Bool if the node receives direct input from semantics of a previous node
+     semantic_input_node keras.Input helper input to handle the computation for the semantics_computational_layer
+     computational_layer tf.keras.layer layer that is connect to the input of the network and the output of the network
+     semantics_computational_layer tf.keras.layer that only acts as a dummy to calculate the semantics
+     input_node Node or list of Nodes which this node will be connected to
+     depth Int depth in the network
      """
 
     def __init__(self,
@@ -115,14 +128,15 @@ class Node(object):
         if self.is_input_node:
             self.output_shape = self.computational_layer.shape.dims
 
-    def set_computational_layer(self): # todo also no input node
-        """Connects the current node with it's input node. This means setting the input of the computational_layer,
-        setting a output connection for the input node and determining a output shape of the current node."""
+    def set_computational_layer(self):
+        """Connects the current node with it's input node(s). This means setting the input of the computational_layer,
+        setting a output connection for the input node and determining a output shape of the current node.
+        Also takes care of connecting the semantics graph"""
 
         if isinstance(self.input_node, list):  # connect for concatenation or add
             input_nodes_merge_layer = [node.computational_layer for node in self.input_node]  # get all nodes to connect
 
-            if self.mutation_level == 0:  # connect initial network
+            if self.mutation_level == 0:  # connect initial network, no special semantics graph needed
                 self.connect_merge_layers(input_nodes_merge_layer)
 
             else:  # connect also semantic layers
@@ -178,15 +192,17 @@ class Node(object):
 
                 self.connect_main_layers()
             else:
-                raise ValueError("also somethign is wrong")
+                raise ValueError("also something is wrong")
 
     def connect_main_layers(self):
+        """Connects the layers of the main graph"""
         self.computational_layer = self._computational_layer(self.input_node.computational_layer)
         self.output_shape = self.computational_layer.shape.dims
         self.input_node.out_connections.append(self)
         self.depth = self.input_node.depth + 1
 
     def connect_merge_layers(self, input_nodes_merge_layer):
+        """connects the merge layers of the main graph"""
         self.computational_layer = self._computational_layer(input_nodes_merge_layer)
         self.output_shape = self.computational_layer.shape.dims
         _depths = []
@@ -197,6 +213,7 @@ class Node(object):
         self.depth = max(_depths)
 
     def only_flatten_test(self):
+        """Makes sure that dimensions don't get negative"""
         if self.output_shape[1] < 5 or self.output_shape[2] < 5:
             out = True
         else:
@@ -204,14 +221,14 @@ class Node(object):
         return out
 
     def _get_random_layer(self):
+        """Chooses a keras layer of possible choices"""
 
         _seed = self.random_state.randint(sys.maxsize)
-        kernel_initializer = self.random_state.choice([keras.initializers.RandomNormal(seed=_seed),
-                                                       keras.initializers.RandomUniform(seed=_seed)])
+        kernel_initializer = self.random_state.choice([keras.initializers.RandomNormal(seed=_seed),  # to be seeded
+                                                       keras.initializers.RandomUniform(seed=_seed)])  # maybe more?
 
         if self.cl:
-            # todo i random state instance test! This sysmax is absurd!
-            _layer = self.random_state.choice([0, 1])
+            _layer = self.random_state.choice([0, 1])  # choose Conv or Pooling, can be extended
             _strides = strides[self.random_state.choice(len(strides))]
             _padding = self.random_state.choice(padding)
 

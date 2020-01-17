@@ -1,14 +1,12 @@
 from Hillclimbing.Hillclimbing import Hillclimbing
-from DeepSemanticLearningMachine import NeuralNetwork
-from utils import check_random_state
+from DeepSemanticLearningMachine.NeuralNetwork import NeuralNetwork
 import numpy as np
-from copy import copy
 from algorithem.Metric import new_elite
 
 
 class DeepSLM(Hillclimbing):  # only for classification for now it should become abstract
 
-    def __init__(self,neighbourhood_size=10, seed=None, stopping_criterion=None):
+    def __init__(self, neighbourhood_size=10, seed=None, stopping_criterion=None):
         super().__init__(neighbourhood_size, seed, stopping_criterion)
 
     def fit(self, x_train, y_train, metric=None, verbose=False):
@@ -22,7 +20,7 @@ class DeepSLM(Hillclimbing):  # only for classification for now it should become
 
     def _evolve(self, verbose):
         for generation in range(10):
-            self.neighborhood = [self.elite.copy().single_mutation() for _ in range(10)]
+            self.neighborhood = [self.elite.copy().isolated_mutation() for _ in range(10)]
             self.neighborhood.sort(key=lambda x: x.fitness, reverse=False)
             self.elite = new_elite(self.neighborhood[0], self.elite)
             if verbose:
@@ -33,7 +31,6 @@ class DeepSLM(Hillclimbing):  # only for classification for now it should become
 
 
 if __name__ == '__main__':
-    from DeepSemanticLearningMachine.NeuralNetwork import NeuralNetwork
     from tensorflow.keras.datasets import cifar10
     from tensorflow import keras
 
