@@ -100,7 +100,7 @@ class NeuralNetwork(object):
                                            seed=self.random_state,
                                            _computational_layer=keras.Input(shape=self.input_shape),
                                            input_shape=self.input_shape,
-                                            )
+                                           )
             self.layers = {"conv": {self.mutation_level: []},
                            "non_conv": {self.mutation_level: []}}
             self.pre_output_node = {self.mutation_level: None}
@@ -178,17 +178,24 @@ class NeuralNetwork(object):
         self.semantics = self.output_node.semantics
         self.fitness = self._evaluate()
 
+
     def build_random_layers(self, starting_node, concatenation_restricted=False):
         if len(starting_node.output_shape) == 4:
             self.build_random_conv(starting_node, concatenation_restricted)
-            self.build_random_non_conv(self.layers["conv"][self.mutation_level][-1], concatenation_restricted=True)
-            self.build_final_nodes()
-            self._set_model()
-        else:
-            self.build_random_non_conv(starting_node, concatenation_restricted)
-            self.build_final_nodes()
-            self._set_model()
+        self.build_fixed_dense()
+        self._set_model()
 
+
+    # def build_random_layers(self, starting_node, concatenation_restricted=False):
+    #     if len(starting_node.output_shape) == 4:
+    #         self.build_random_conv(starting_node, concatenation_restricted)
+    #         self.build_random_non_conv(self.layers["conv"][self.mutation_level][-1], concatenation_restricted=True)
+    #         self.build_final_nodes()
+    #         self._set_model()
+    #     else:
+    #         self.build_random_non_conv(starting_node, concatenation_restricted)
+    #         self.build_final_nodes()
+    #         self._set_model()
 
     def build_random_conv(self, starting_node, concatenation_restricted=False):
         """
@@ -322,6 +329,24 @@ class NeuralNetwork(object):
                                                                          seed=self.random_state))
                     self.current_with += 1
 
+    def build_fixed_dense(self):
+
+        """Builds the dense layer part
+                for the moment it is static but could easily be adapted to work as a SLM"""
+        kernel_initializer = keras.initializers.RandomNormal(seed=self.random_state.randint(sys.maxsize))
+        self.layers["non_conv"][self.mutation_level].append(Node(mutation_level=self.mutation_level,
+                                                             seed=self.random_state,
+                                                             input_node=self.layers["conv"][self.mutation_level][-1],
+                                                             _computational_layer=keras.layers.Dense(
+                                                                 20,
+                                                                 activation='relu',
+                                                                 kernel_initializer=kernel_initializer)))
+
+        self.build_final_nodes()
+
+    def get_last_nodes(self):
+        return [sublist[-1] for sublist in self.layers["non_conv"].values()]
+
     def build_random_non_conv(self, starting_node, concatenation_restricted=False):
 
         # skip connections?
@@ -371,7 +396,7 @@ class NeuralNetwork(object):
             # a node can be concatenated if it has the same shape
             possible_concat_nodes = [item for sublist in self.layers["non_conv"].values() for item in sublist]
             # all possible nodes of the network of the layer type
-            if self.layers["non_conv"][self.mutation_level]: # todo if flatten layer
+            if self.layers["non_conv"][self.mutation_level]:  # todo if flatten layer
                 possible_concat_nodes.remove(to_connect_with_node)
 
             if not possible_concat_nodes:  # if there are no nodes with the same shape as the input node
@@ -465,9 +490,7 @@ class NeuralNetwork(object):
                                 _computational_layer=keras.layers.Dense(
                                     self.n_outputs,
                                     activation='softmax'))
-        #self.output_node = self.pre_output_node[self.mutation_level]
-
-
+        # self.output_node = self.pre_output_node[self.mutation_level]
 
     def get_semantics_initial_nodes(self):
         """builds a model to return the semantics for all nodes and saves them to each node"""
@@ -520,7 +543,6 @@ class NeuralNetwork(object):
                                       if node.semantic_input]))
         semantic_data.append(self.pre_output_node[self.mutation_level].input_data[0])
 
-
         return semantic_input_nodes, semantic_data
 
     def get_semantics_mutation_nodes(self):
@@ -540,7 +562,7 @@ class NeuralNetwork(object):
     def random_mutation_node(self):
         """:returns any Node"""
         all_nodes = self.get_all_nodes_layer_type("conv")
-        mutation_node = self.random_state.choice(all_nodes)
+        mutation_node = self.random_state.choice([node for node in all_nodes if len(node.output_shape) > 2])
         return mutation_node
 
     def get_all_nodes(self):

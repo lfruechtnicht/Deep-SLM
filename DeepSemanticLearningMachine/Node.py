@@ -239,7 +239,7 @@ class Node(object):
             idx = self.random_state.choice(len(self.non_conv_parameters))
             _neurons = self.non_conv_parameters[idx][0]
             _activations = self.non_conv_parameters[idx][1]
-            layer = keras.layers.Dense(units=_neurons, activation=_activations)
+            layer = keras.layers.Dense(units=_neurons, activation=_activations, kernel_initializer=kernel_initializer)
 
         self._computational_layer = layer
 
