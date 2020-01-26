@@ -5,39 +5,14 @@ import numpy as np
 
 import uuid
 
-# layer parameters should propably also be parameters and be initialized a once to reduce amount of calling choice
-
-activations = ["softmax",
-               "elu",
-               "selu",
-               "softplus",
-               "softsign",
-               "relu",
-               "tanh",
-               "sigmoid",
-               "hard_sigmoid",
-               "exponential",
-               "linear",
-               ]
-strides = [(3, 3)#,
-           #(2, 2),
-           #(1, 1)
-           ]
-filters = list(range(1, 10))
-kernel_size = [(5, 5)#,
-               #(3, 3),
-               #(1, 1)
-               ]
-padding = ["valid",
-           "same"]
-pool_size = [(1, 1), (2, 2)]
-
 
 
 class Node(object):
     """A node/layer in the directed graph which represents a Neural Network.
      Attribute:
      mutation_level: Int The number of mutation which is currently performed
+     conv_parameters: list containing all possible combinations of parameters for keras conv layers
+     pool_parameters: list containing all possible combinations of parameters for keras pool layers
      is_input_node: Bool If this node is the initial input exposed to the raw data
      _computational_layer tf.keras.layers Layer A reusable layer or none
      cl Bool if this is a node of the convolutional part of the network (not used yet)
@@ -55,9 +30,12 @@ class Node(object):
 
     def __init__(self,
                  mutation_level,
+                 conv_parameters=None,
+                 pool_parameters=None,
+                 non_conv_parameters=None,
                  is_input_node=False,
                  _computational_layer=None,
-                 cl=True,
+                 layer_type="conv",
                  seed=None,
                  input_shape=None,
                  semantics=None,
@@ -71,11 +49,14 @@ class Node(object):
                  ):
 
         self.mutation_level = mutation_level
+        self.conv_parameters = conv_parameters
+        self.pool_parameters = pool_parameters
+        self.non_conv_parameters = non_conv_parameters
         self.input_node = input_node
         self._computational_layer = _computational_layer
         self.computational_layer = computational_layer
         self.is_input_node = is_input_node
-        self.cl = cl
+        self.layer_type = layer_type
         self.input_shape = input_shape
         self.output_shape = None
         self.out_connections = []
@@ -97,7 +78,7 @@ class Node(object):
 
     def __copy__(self):
         is_input_node = self.is_input_node
-        cl = self.cl
+        layer_type = self.layer_type
         computational_layer = self.computational_layer
         random_state = self.random_state
         depth = self.depth
@@ -109,7 +90,7 @@ class Node(object):
         semantics_computational_layer = self.semantics_computational_layer
 
         return Node(is_input_node=is_input_node,
-                    cl=cl,
+                    layer_type=layer_type,
                     computational_layer=computational_layer,
                     seed=random_state,
                     depth=depth,
@@ -119,9 +100,6 @@ class Node(object):
                     semantic_input_node=semantic_input_node,
                     input_data=input_data,
                     semantics_computational_layer=semantics_computational_layer)
-
-    def __deepcopy__(self, memodict={}):# todo?
-        pass
 
     def _input_node_output_shape(self):
         """sets the the output shape of an input node."""
@@ -223,20 +201,19 @@ class Node(object):
     def _get_random_layer(self):
         """Chooses a keras layer of possible choices"""
 
-        _seed = self.random_state.randint(sys.maxsize)
-        kernel_initializer = self.random_state.choice([keras.initializers.RandomNormal(seed=_seed),  # to be seeded
-                                                       keras.initializers.RandomUniform(seed=_seed)])  # maybe more?
+        _seed = self.random_state.randint(sys.maxsize)  # to be able to reproduce results
+        kernel_initializer = self.random_state.choice([keras.initializers.RandomNormal(seed=_seed),
+                                                       keras.initializers.RandomUniform(seed=_seed)])
 
-        if self.cl:
+        if self.layer_type == "conv":
             _layer = self.random_state.choice([0, 1])  # choose Conv or Pooling, can be extended
-            _strides = strides[self.random_state.choice(len(strides))]
-            _padding = self.random_state.choice(padding)
-
             if _layer == 0:
-
-                _filters = self.random_state.choice(filters)
-                _activation = self.random_state.choice(activations)
-                _kernel_size = kernel_size[self.random_state.choice(len(kernel_size))]
+                idx = self.random_state.choice(len(self.conv_parameters))
+                _filters = self.conv_parameters[idx][0]
+                _kernel_size = self.conv_parameters[idx][1]
+                _strides = self.conv_parameters[idx][2]
+                _padding = self.conv_parameters[idx][3]
+                _activation = self.conv_parameters[idx][4]
                 layer = keras.layers.Conv2D(filters=_filters,
                                             kernel_size=_kernel_size,
                                             strides=_strides,
@@ -245,7 +222,10 @@ class Node(object):
                                             kernel_initializer=kernel_initializer)
             else:
                 _pooling = self.random_state.choice([0, 1])
-                _pool_size = pool_size[self.random_state.choice(len(pool_size))]
+                idx = self.random_state.choice(len(self.pool_parameters))
+                _pool_size = self.pool_parameters[idx][0]
+                _strides = self.pool_parameters[idx][1]
+                _padding = self.pool_parameters[idx][2]
 
                 if _pooling == 0:
                     layer = keras.layers.AveragePooling2D(pool_size=_pool_size,
@@ -255,7 +235,13 @@ class Node(object):
                     layer = keras.layers.MaxPool2D(pool_size=_pool_size,
                                                    strides=_strides,
                                                    padding=_padding)
-            self._computational_layer = layer
+        else:
+            idx = self.random_state.choice(len(self.non_conv_parameters))
+            _neurons = self.non_conv_parameters[idx][0]
+            _activations = self.non_conv_parameters[idx][1]
+            layer = keras.layers.Dense(units=_neurons, activation=_activations)
+
+        self._computational_layer = layer
 
 
 if __name__ == '__main__':

@@ -1,5 +1,6 @@
 from numpy import sqrt, mean, square, empty, where
 from sklearn.metrics import roc_auc_score, log_loss, accuracy_score
+import numpy as np
 
 
 class Metric():
@@ -93,6 +94,32 @@ class BinaryCrossEntropy(Metric):
         return log_loss(target, y_pred_prob)
 
 
+class CCE(Metric):
+    greater_is_better = False
+    name = "CCE"
+
+    def __repr__(self):
+        return str("LogLoss")
+
+    def __str__(self):
+        return str("LogLoss")
+
+    @staticmethod
+    def evaluate(prediction, target, epsilon=1e-12,):
+
+        """
+        Computes cross entropy between targets (encoded as one-hot vectors)
+        and predictions.
+        Input: predictions (N, k) ndarray
+               targets (N, k) ndarray
+        Returns: scalar
+        """
+        predictions = np.clip(prediction, epsilon, 1. - epsilon)
+        N = predictions.shape[0]
+        ce = -np.sum(target * np.log(predictions + 1e-9)) / N
+        return ce
+
+
 def _is_better(value_1, value_2, metric):
     # ===========================================================================
     # print('[DEBUG] value 1 = %.5f, value 2 = %.5f\n' % (value_1, value_2))
@@ -102,8 +129,8 @@ def _is_better(value_1, value_2, metric):
     else:
         return value_1 < value_2
 
-def new_elite(value_1, value_2):
 
+def new_elite(value_1, value_2):
     if True:
         if value_1.fitness > value_2.fitness:
             return value_2
@@ -114,4 +141,3 @@ def new_elite(value_1, value_2):
             return value_1
         else:
             return value_2
-

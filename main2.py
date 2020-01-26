@@ -1,31 +1,32 @@
-from tensorflow.keras.datasets import cifar10
+from tensorflow.keras.datasets import boston_housing
 from tensorflow import keras
 from DeepSemanticLearningMachine.DeepSLM import DeepSLM
 from algorithem.Metric import *
 
-(x_train, y_train), (x_test, y_test) = cifar10.load_data()
-num_classes = 10
-num_predictions = 20
 
-y_train = keras.utils.to_categorical(y_train, num_classes)
-y_test = keras.utils.to_categorical(y_test, num_classes)
+(x_train, y_train), (x_test, y_test) = boston_housing.load_data()
 
-x_train = x_train.astype('float32')
-x_test = x_test.astype('float32')
-x_train /= 255
-x_test /= 255
+
+
+mean = x_train.mean(axis=0)
+x_train -= mean
+std = x_train.std(axis=0)
+x_train /= std
+
+x_test -= mean
+x_test /= std
 
 activations = [
-    "elu",
-    "selu",
+               "elu",
+               "selu",
 
-    "relu",
-    "tanh",
-    "sigmoid",
-    "hard_sigmoid",
-    "exponential",
-    "linear",
-]
+               "relu",
+               "tanh",
+               "sigmoid",
+               "hard_sigmoid",
+               "exponential",
+               "linear",
+               ]
 strides = [(3, 3),
            (2, 2),
            (1, 1)
@@ -39,7 +40,8 @@ padding = ["valid",
            "same"]
 pool_size = [(1, 1), (2, 2)]
 
-neurons = list(range(10, 20))
+neurons = list(range(1, 10))
+
 
 layer_parameters = {"filters": filters,
                     "kernel_size": kernel_size,
@@ -49,8 +51,11 @@ layer_parameters = {"filters": filters,
                     "pool_size": pool_size,
                     "neurons": neurons}
 
-DSLM = DeepSLM(CCE, seed=3, max_depth_cl=20, max_width_cl=3, max_depth_non_conv=4,
-               max_width_non_conv=3, neighbourhood_size=5, layer_parameters=layer_parameters)
+
+
+
+DSLM = DeepSLM(CCE, seed=3, max_width_cl=1, neighbourhood_size=20, layer_parameters=layer_parameters)
 DSLM.fit(x_train, y_train, validation_data=(x_test, y_test), verbose=True)
+
 
 """WARNING: HIGH MEMORY REQUIREMENTS! TESTED ONLY WITH 16GB"""
