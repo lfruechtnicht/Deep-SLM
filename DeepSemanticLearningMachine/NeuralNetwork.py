@@ -490,7 +490,7 @@ class NeuralNetwork(object):
                                 _computational_layer=keras.layers.Dense(
                                     self.n_outputs,
                                     activation='softmax'))
-        # self.output_node = self.pre_output_node[self.mutation_level]
+        self.output_node = self.pre_output_node[self.mutation_level]
 
     def get_semantics_initial_nodes(self):
         """builds a model to return the semantics for all nodes and saves them to each node"""
