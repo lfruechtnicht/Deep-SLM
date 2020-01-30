@@ -51,6 +51,6 @@ layer_parameters = {"filters": filters,
 
 DSLM = DeepSLM(CCE, seed=1, max_depth_cl=20, max_width_cl=1, max_depth_non_conv=4,
                max_width_non_conv=3, neighbourhood_size=5, layer_parameters=layer_parameters)
-DSLM.fit(x_train, y_train, validation_data=(x_test, y_test), verbose=True)
+DSLM.fit(x_train, y_train, validation_data=(x_test, y_test), verbose=True)  # todo validation true false
 
 """WARNING: HIGH MEMORY REQUIREMENTS! TESTED ONLY WITH 16GB"""
