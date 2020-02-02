@@ -1,7 +1,7 @@
 from tensorflow.keras.datasets import boston_housing
 from tensorflow import keras
 from DeepSemanticLearningMachine.DeepSLM import DeepSLM
-from algorithem.Metric import *
+from algorithem.Metric import CCE, MSE
 
 
 (x_train, y_train), (x_test, y_test) = boston_housing.load_data()
@@ -54,7 +54,8 @@ layer_parameters = {"filters": filters,
 
 
 
-DSLM = DeepSLM(CCE, seed=3, max_width_cl=1, neighbourhood_size=20, layer_parameters=layer_parameters)
+DSLM = DeepSLM(MSE, seed=1, max_depth_cl=1, max_width_cl=1, max_depth_non_conv=5,
+               max_width_non_conv=1, neighbourhood_size=20, layer_parameters=layer_parameters)
 DSLM.fit(x_train, y_train, validation_data=(x_test, y_test), verbose=True)
 
 

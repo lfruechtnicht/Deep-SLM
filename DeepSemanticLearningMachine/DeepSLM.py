@@ -1,13 +1,13 @@
 from Hillclimbing.Hillclimbing import Hillclimbing
 from DeepSemanticLearningMachine.NeuralNetwork import NeuralNetwork
 import numpy as np
-from algorithem.Metric import new_elite
+from algorithem.Metric import new_elite, CCE
 import gc
 from itertools import combinations_with_replacement, product
 
 
-
-class DeepSLM(Hillclimbing):  #  todo only for classification for now it should become abstract to also be for non image datasets
+class DeepSLM(
+    Hillclimbing):  # todo only for classification for now it should become abstract to also be for non image datasets
     """
     Parameters:
         layer_parameters: {'filters': list of Integers, the dimensionality of the output space (i.e. the number of
@@ -26,12 +26,8 @@ class DeepSLM(Hillclimbing):  #  todo only for classification for now it should 
                            'neurons': list containing the number of neurons possible for the non convolutional part.}
     """
 
-
-
-
-
     def __init__(self,  # todo fix memory being used even tough not needed!
-                 metric,
+                 metric=CCE,
                  seed=None,  # todo add semantic stopping criterion
                  neighbourhood_size=10,  # todo add other mutations
                  stopping_criterion=None,  # todo add evolution of dense layers
@@ -55,18 +51,29 @@ class DeepSLM(Hillclimbing):  #  todo only for classification for now it should 
         self.layer_parameters = layer_parameters
         self.conv_parameters, self.pool_parameters, self.non_conv_parameters = self._set_parameters()
 
-    def fit(self, x_train, y_train, validation_data=None, verbose=False, ):
-        self._evolve(verbose, x_train, y_train, validation_data)
+    def fit(self, x_train, y_train, validation_data=None, verbose=False):
+        if self.metric.type is "classification":
+            try:
+                n_outputs = y_train[0].shape[0]
+            except IndexError:
+                raise ValueError(f"If metric is set to classification targets of shape [n_samples, n_classes] expected!"
+                                 f"Recieved: {y_train.shape}")
+        elif self.metric.type is "regression":
+            try:
+                n_outputs = len(y_train.shape)
+            except IndexError:
+                raise ValueError(f"If metric is set to regression targets of shape [n_samples] expected!"
+                                 f"Recieved: {y_train.shape}")
 
+        self._evolve(verbose, x_train, y_train, validation_data, n_outputs)
 
-    def _evolve(self, verbose, x_train, y_train, validation_data):
-        #if len(y_test.shape)
+    def _evolve(self, verbose, x_train, y_train, validation_data, n_outputs):
 
         self.neighborhood = [NeuralNetwork(metric=self.metric,
                                            x_train=x_train,
                                            y_train=y_train,
                                            input_shape=x_train[0].shape,
-                                           n_outputs=y_train[0].shape[0],
+                                           n_outputs=n_outputs,
                                            seed=self.random_state,
                                            layer_parameters=self.layer_parameters,
                                            conv_parameters=self.conv_parameters,
@@ -88,7 +95,8 @@ class DeepSLM(Hillclimbing):  #  todo only for classification for now it should 
 
         for generation in range(30):
             self.current_generation += 1
-            self.neighborhood = [self.elite.copy().isolated_mutation() for _ in range(self.neighborhood_size)]
+            self.neighborhood = [self.elite.copy().isolated_mutation() for _ in
+                                 range(self.neighborhood_size)]
             self.elite = self._get_elite()
             if verbose:
                 self._verbose_reporter()
@@ -101,10 +109,6 @@ class DeepSLM(Hillclimbing):  #  todo only for classification for now it should 
         _pool_parameters = [pool_size, strides, padding]
         _full_parameters = [neurons, activations]
         return list(product(*_conv_parameters)), list(product(*_pool_parameters)), list(product(*_full_parameters))
-
-
-
-
 
 
 if __name__ == '__main__':
@@ -124,11 +128,11 @@ if __name__ == '__main__':
     x_train /= 255
     x_test /= 255
 
+    x_train = x_train[:1000]
+    y_train = y_train[:1000]
+
     DSLM = DeepSLM(seed=0)
     DSLM.fit(x_train, y_train, verbose=True)
     print(DSLM.predict(x_test).shape)
 
-
     # generate all solutions at the beginning for get_layer
-
-

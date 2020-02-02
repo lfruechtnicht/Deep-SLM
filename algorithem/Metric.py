@@ -97,6 +97,7 @@ class BinaryCrossEntropy(Metric):
 class CCE(Metric):
     greater_is_better = False
     name = "CCE"
+    type ="classification"
 
     def __repr__(self):
         return str("LogLoss")
@@ -118,6 +119,24 @@ class CCE(Metric):
         N = predictions.shape[0]
         ce = -np.sum(target * np.log(predictions + 1e-9)) / N
         return ce
+
+class MSE(Metric):
+    greater_is_better = False
+    type = "regression"
+    name = "MSE"
+
+    @staticmethod
+    def evaluate(prediction, target):
+        # =======================================================================
+        # value = 0
+        # for i in range(prediction.shape[0]):
+        #     dif = prediction[i] - target[i]
+        #     value += dif * dif
+        # value /= prediction.shape[0]
+        # value = sqrt(value)[0]
+        # return value
+        # =======================================================================
+        return mean(square(prediction - target))
 
 
 def _is_better(value_1, value_2, metric):

@@ -18,7 +18,7 @@ class Hillclimbing():#todo ABC META
 
     def _verbose_reporter(self):
         print(f"Generation: {self.current_generation}, {str(self.elite)}")
-        if self.current_generation % 5 == 0:
+        if self.current_generation % 5 == 0 and self.current_generation != 0:
             print("====================   ===================")
             print(f"Generation: {self.current_generation}, {str(self.elite)}, "
                   f"Validation Fitness: {self.elite.evaluate()}")
