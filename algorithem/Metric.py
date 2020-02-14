@@ -1,6 +1,8 @@
 from numpy import sqrt, mean, square, empty, where
 from sklearn.metrics import roc_auc_score, log_loss, accuracy_score
+import tensorflow as tf
 import numpy as np
+tf.enable_eager_execution()
 
 
 class Metric():
@@ -137,6 +139,28 @@ class MSE(Metric):
         # return value
         # =======================================================================
         return mean(square(prediction - target))
+
+
+class Accurarcy(Metric):
+    greater_is_better = True
+    name = "Accuracy"
+    type ="classification"
+
+    def __repr__(self):
+        return str("Acc")
+
+    def __str__(self):
+        return str("Acc")
+
+    @staticmethod
+    def evaluate(prediction, target):
+
+        m = tf.keras.metrics.CategoricalAccuracy()
+        m.update_state(y_true=target, y_pred=prediction)
+        return m.result().numpy()
+
+
+
 
 
 def _is_better(value_1, value_2, metric):

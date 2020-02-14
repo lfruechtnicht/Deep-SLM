@@ -52,8 +52,8 @@ layer_parameters = {"filters": filters,
 x_train = x_train[:1000]
 y_train = y_train[:1000]
 
-DSLM = DeepSLM(CCE, seed=1, max_depth_cl=20, max_width_cl=3, max_depth_non_conv=4,
-               max_width_non_conv=3, neighbourhood_size=20, layer_parameters=layer_parameters) # todo bias exlusion
-DSLM.fit(x_train, y_train, validation_data=(x_test, y_test), verbose=True)  # todo validation true false
+DSLM = DeepSLM(CCE, seed=0, max_depth_cl=20, max_width_cl=3, max_depth_non_conv=4,
+               max_width_non_conv=3, neighbourhood_size=10, layer_parameters=layer_parameters)
+DSLM.fit(x_train, y_train, validation_data=(x_test, y_test), verbose=True, validation_metric=Accurarcy)  # todo validation true false
 
 """WARNING: HIGH MEMORY REQUIREMENTS! TESTED ONLY WITH 16GB"""

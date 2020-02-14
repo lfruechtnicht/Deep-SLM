@@ -25,7 +25,7 @@ def check_random_state(seed):
                          ' instance' % seed)
 
 
-def get_truncated_normal(mean=0.5, sd=1.5, low=0.5, upp=10):
+def get_truncated_normal(mean=0.5, sd=1.5, low=0.5, upp=10):  # todo poisson distribution
     X = truncnorm((low - mean) / sd, (upp - mean) / sd, loc=mean, scale=sd)
 
     int(X.rvs(1))

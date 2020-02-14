@@ -6,8 +6,7 @@ import gc
 from itertools import combinations_with_replacement, product
 
 
-class DeepSLM(
-    Hillclimbing):  # todo only for classification for now it should become abstract to also be for non image datasets
+class DeepSLM(Hillclimbing):  # todo only for classification for now it should become abstract to also be for non image datasets
     """
     Parameters:
         layer_parameters: {'filters': list of Integers, the dimensionality of the output space (i.e. the number of
@@ -51,7 +50,7 @@ class DeepSLM(
         self.layer_parameters = layer_parameters
         self.conv_parameters, self.pool_parameters, self.non_conv_parameters = self._set_parameters()
 
-    def fit(self, x_train, y_train, validation_data=None, verbose=False):
+    def fit(self, x_train, y_train, validation_data=None, verbose=False, validation_metric=None):
         if self.metric.type is "classification":
             try:
                 n_outputs = y_train[0].shape[0]
@@ -60,14 +59,14 @@ class DeepSLM(
                                  f"Recieved: {y_train.shape}")
         elif self.metric.type is "regression":
             try:
-                n_outputs = len(y_train.shape)
+                n_outputs = 1
             except IndexError:
                 raise ValueError(f"If metric is set to regression targets of shape [n_samples] expected!"
                                  f"Recieved: {y_train.shape}")
 
-        self._evolve(verbose, x_train, y_train, validation_data, n_outputs)
+        self._evolve(verbose, x_train, y_train, validation_data, n_outputs, validation_metric)
 
-    def _evolve(self, verbose, x_train, y_train, validation_data, n_outputs):
+    def _evolve(self, verbose, x_train, y_train, validation_data, n_outputs, validation_metric):
 
         self.neighborhood = [NeuralNetwork(metric=self.metric,
                                            x_train=x_train,
@@ -84,16 +83,17 @@ class DeepSLM(
                                            max_depth_non_conv=self.max_depth_non_conv,
                                            max_width_non_conv=self.max_width_non_conv,
                                            max_splits=self.max_splits,
-                                           validation_data=validation_data
+                                           validation_data=validation_data,
+                                           validation_metric=validation_metric
                                            ) for _ in range(self.neighborhood_size)]
-        self.neighborhood = sorted(self.neighborhood, key=lambda x: x.fitness, reverse=self.metric.greater_is_better)
+        self.neighborhood = sorted(self.neighborhood, key=lambda x: x.fitness, reverse=self.metric.greater_is_better)  # argmax
         self.elite = self.neighborhood[0]
         if verbose:
             self._verbose_reporter()
         del self.neighborhood
         gc.collect()
 
-        for generation in range(30):
+        for generation in range(100):
             self.current_generation += 1
             self.neighborhood = [self.elite.copy().isolated_mutation() for _ in
                                  range(self.neighborhood_size)]
