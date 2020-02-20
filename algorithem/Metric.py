@@ -8,6 +8,7 @@ tf.enable_eager_execution()
 class Metric():
     greater_is_better = None
 
+
     @staticmethod
     def evaluate(prediction, target):
         pass
@@ -15,6 +16,9 @@ class Metric():
 
 class RootMeanSquaredError(Metric):
     greater_is_better = False
+    name = "RMSE"
+    type = "classification"
+
 
     @staticmethod
     def evaluate(prediction, target):
@@ -142,9 +146,9 @@ class MSE(Metric):
 
 
 class Accurarcy(Metric):
-    greater_is_better = True
-    name = "Accuracy"
-    type ="classification"
+    greater_is_better = False
+    name = "CCE"
+    type = "classification"
 
     def __repr__(self):
         return str("Acc")

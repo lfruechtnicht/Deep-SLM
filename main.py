@@ -30,7 +30,7 @@ strides = [(3, 3),
            (2, 2),
            (1, 1)
            ]
-filters = list(range(1, 10))
+filters = list(range(1, 3))
 kernel_size = [(5, 5),
                (3, 3),
                (1, 1)
@@ -52,8 +52,8 @@ layer_parameters = {"filters": filters,
 x_train = x_train[:1000]
 y_train = y_train[:1000]
 
-DSLM = DeepSLM(CCE, seed=0, max_depth_cl=20, max_width_cl=3, max_depth_non_conv=4,
-               max_width_non_conv=3, neighbourhood_size=10, layer_parameters=layer_parameters)
+DSLM = DeepSLM(RootMeanSquaredError, seed=1, max_depth_cl=10, max_width_cl=1, max_depth_non_conv=4,
+               max_width_non_conv=3, neighbourhood_size=25, layer_parameters=layer_parameters)
 DSLM.fit(x_train, y_train, validation_data=(x_test, y_test), verbose=True, validation_metric=Accurarcy)  # todo validation true false
 
 """WARNING: HIGH MEMORY REQUIREMENTS! TESTED ONLY WITH 16GB"""

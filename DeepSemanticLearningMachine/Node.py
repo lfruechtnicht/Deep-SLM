@@ -18,11 +18,15 @@ class Node(object):
         self.output_shape = None
         self.out_connections = []
         self.semantics = None
+        self._computational_layer = None  # the layer to be shared
         self.computational_layer = None  # the layer connected to the main graph
         self.input_data = None
         self.semantic_input = False
         self.semantic_input_node = None
         self.semantics_computational_layer = None  # the layer connected to the semantics graph
+
+    def __repr__(self):
+        return str(self._computational_layer.name)
 
     def _set_computational_layer(self):
         """
@@ -59,12 +63,15 @@ class FlattenNode(Node):
         self._computational_layer = keras.layers.Flatten()
         self._set_computational_layer()
 
-    def _connect_main_layers(self):
+    def _connect_main_layers(self, depth=False):
         """Connects the layers of the main graph"""
         self.computational_layer = self._computational_layer(self.input_node.computational_layer)
         self.output_shape = self.computational_layer.shape.dims
         self.input_node.out_connections.append(self)
-        self.depth = self.input_node.depth + 1
+        if depth:
+            self.depth = 1
+        else:
+            self.depth = self.input_node.depth + 1
 
     def _set_computational_layer(self):
         if self.mutation_level == 0:  # connect initial network
@@ -80,7 +87,7 @@ class FlattenNode(Node):
             self.input_data = self.input_node.semantics  # to easily find the data
             self.semantic_input_node = keras.Input(shape=self.input_node.output_shape[1:])  # Input for semantics
             self.semantics_computational_layer = self._computational_layer(self.semantic_input_node)
-            self._connect_main_layers()
+            self._connect_main_layers(depth=True)
         else:
             raise ValueError("also something is wrong")
 
@@ -97,7 +104,7 @@ class ConvNode(Node):
     def _get_random_layer(self):
         """Chooses a keras layer of possible choices"""
 
-        _seed = self.random_state.randint(sys.maxsize)  # to be able to reproduce results
+        _seed = self.random_state.randint(1E6)  # to be able to reproduce results
         kernel_initializer = self.random_state.choice([keras.initializers.RandomNormal(seed=_seed),
                                                        keras.initializers.RandomUniform(seed=_seed)])
 
@@ -140,12 +147,15 @@ class ConvNode(Node):
             out = False
         return out
 
-    def _connect_main_layers(self):
+    def _connect_main_layers(self, depth=False):
         """Connects the layers of the main graph"""
         self.computational_layer = self._computational_layer(self.input_node.computational_layer)
         self.output_shape = self.computational_layer.shape.dims
         self.input_node.out_connections.append(self)
-        self.depth = self.input_node.depth + 1
+        if depth:
+            self.depth = 1
+        else:
+            self.depth = self.input_node.depth + 1
 
     def _set_computational_layer(self):
         if self.mutation_level == 0:  # connect initial network
@@ -161,7 +171,7 @@ class ConvNode(Node):
             self.input_data = self.input_node.semantics  # to easily find the data
             self.semantic_input_node = keras.Input(shape=self.input_node.output_shape[1:])  # Input for semantics
             self.semantics_computational_layer = self._computational_layer(self.semantic_input_node)
-            self._connect_main_layers()
+            self._connect_main_layers(depth=True)
         else:
             raise ValueError("also something is wrong")
 
@@ -180,7 +190,7 @@ class MergeNode(Node):
         for input_node in self.input_node:
             input_node.out_connections.append(self)
             _depths.append(input_node.depth)
-        self.depth = max(_depths)
+        self.depth = min(_depths)
 
     def _set_computational_layer(self):
         input_nodes = [node.computational_layer for node in self.input_node]  # get all nodes to connect
@@ -262,7 +272,7 @@ class DenseNode(Node):
 
 
     def _get_random_layer(self):
-        _seed = self.random_state.randint(sys.maxsize)  # to be able to reproduce results
+        _seed = self.random_state.randint(1E7)  # to be able to reproduce results
         kernel_initializer = self.random_state.choice([keras.initializers.RandomNormal(seed=_seed),
                                                        keras.initializers.RandomUniform(seed=_seed)])
 
