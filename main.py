@@ -3,6 +3,13 @@ from tensorflow import keras
 from DeepSemanticLearningMachine.DeepSLM import DeepSLM
 from algorithem.Metric import *
 
+
+# todo: Building the network, espeicially the cp!
+# todo: seperate the initialization and mutation of the network!
+# todo: Test mutation af a function to be be applied in parralel!
+# todo: build mutation in practice!
+
+
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 num_classes = 10
 num_predictions = 20
@@ -25,7 +32,7 @@ activations = [
     "hard_sigmoid",
     "exponential",
     "linear",
-]
+    ]
 strides = [(3, 3),
            (2, 2),
            (1, 1)
@@ -52,8 +59,13 @@ layer_parameters = {"filters": filters,
 x_train = x_train[:1000]
 y_train = y_train[:1000]
 
-DSLM = DeepSLM(RootMeanSquaredError, seed=1, max_depth_cl=10, max_width_cl=1, max_depth_non_conv=4,
-               max_width_non_conv=3, neighbourhood_size=25, layer_parameters=layer_parameters)
+""" TODO: -Lukas main.py """
+DSLM = DeepSLM(RootMeanSquaredError, seed=4, max_depth_cl=10, max_width_cl=1, max_depth_non_conv=4,
+               max_width_non_conv=3, neighbourhood_size=2, layer_parameters=layer_parameters)
+#===============================================================================
+# DSLM = DeepSLM(RootMeanSquaredError, seed=1, max_depth_cl=10, max_width_cl=1, max_depth_non_conv=4,
+#                max_width_non_conv=3, neighbourhood_size=25, layer_parameters=layer_parameters)
+#===============================================================================
 DSLM.fit(x_train, y_train, validation_data=(x_test, y_test), verbose=True, validation_metric=Accurarcy)  # todo validation true false
 
 """WARNING: HIGH MEMORY REQUIREMENTS! TESTED ONLY WITH 16GB"""

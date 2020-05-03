@@ -1,13 +1,14 @@
 from numpy import sqrt, mean, square, empty, where
 from sklearn.metrics import roc_auc_score, log_loss, accuracy_score
-import tensorflow as tf
+
 import numpy as np
+import tensorflow as tf
+
 tf.enable_eager_execution()
 
 
 class Metric():
     greater_is_better = None
-
 
     @staticmethod
     def evaluate(prediction, target):
@@ -18,7 +19,6 @@ class RootMeanSquaredError(Metric):
     greater_is_better = False
     name = "RMSE"
     type = "classification"
-
 
     @staticmethod
     def evaluate(prediction, target):
@@ -50,10 +50,14 @@ class Accuracy(Metric):
 
     @staticmethod
     def evaluate(prediction, target):
+        return accuracy_score(target, prediction, normalize=True)
+        
         # =======================================================================
         # return accuracy_score(target, where(prediction >= 0.5, True, False))
         # =======================================================================
-        return accuracy_score(where(target >= 0.5, True, False), where(prediction >= 0.5, True, False))
+        #=======================================================================
+        # return accuracy_score(where(target >= 0.5, True, False), where(prediction >= 0.5, True, False))
+        #=======================================================================
 
 
 class AUROC(Metric):
@@ -103,7 +107,7 @@ class BinaryCrossEntropy(Metric):
 class CCE(Metric):
     greater_is_better = False
     name = "CCE"
-    type ="classification"
+    type = "classification"
 
     def __repr__(self):
         return str("LogLoss")
@@ -125,6 +129,7 @@ class CCE(Metric):
         N = predictions.shape[0]
         ce = -np.sum(target * np.log(predictions + 1e-9)) / N
         return ce
+
 
 class MSE(Metric):
     greater_is_better = False
@@ -162,9 +167,6 @@ class Accurarcy(Metric):
         m = tf.keras.metrics.CategoricalAccuracy()
         m.update_state(y_true=target, y_pred=prediction)
         return m.result().numpy()
-
-
-
 
 
 def _is_better(value_1, value_2, metric):

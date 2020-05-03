@@ -1,10 +1,19 @@
-import tensorflow as tf
-from tensorflow import keras
-from tensorflow.keras.models import Model
-from DeepSemanticLearningMachine.Node import InputNode, MergeNode, ConvNode, DenseNode, FlattenNode
-from utils import *
-import sys
 from itertools import product
+import sys
+
+from numpy import where
+from sklearn.metrics.classification import accuracy_score
+from tensorflow import keras
+
+from DeepSemanticLearningMachine.Node import InputNode, MergeNode, ConvNode, DenseNode, FlattenNode
+import tensorflow as tf
+from tensorflow.keras.models import Model
+from utils import *
+
+from .non_convolutional.common.neural_network_builder import NeuralNetworkBuilder
+from .non_convolutional.components.input_neuron import InputNeuron
+from .non_convolutional.mutation import calculate_ols
+from .non_convolutional.mutation import mutate_hidden_layers
 
 
 def softmax(x):
@@ -68,7 +77,8 @@ class NeuralNetwork(object):
                  conv_layers=None,
                  non_conv_layers=None,
                  validation_data=None,
-                 validation_metric=None
+                 validation_metric=None,
+                 random_ncp=None
                  ):
 
         self.random_state = check_random_state(seed)
@@ -99,6 +109,9 @@ class NeuralNetwork(object):
         self.fitness = fitness
         self.current_with = 1
 
+        """ TODO: -Lukas NeuralNetwork __init__ """
+        self.random_ncp = random_ncp
+
         self.initial_input_node = initial_input_node
         self.conv_layers = conv_layers
         self.non_conv_layers = non_conv_layers
@@ -110,6 +123,17 @@ class NeuralNetwork(object):
             self.initialize_network()
 
     def __repr__(self):
+        """ TODO: -Lukas __repr__ """
+        y_pred_as_labels = self.semantics.argmax(axis=1)
+        y_train_as_labels = self.y_train.argmax(axis=1)
+        print('Global accuracy: %.5f%%' % (accuracy_score(y_train_as_labels, y_pred_as_labels) * 100))
+        if self.random_ncp:
+            pred = self.semantics.clip(0, 1)
+            for i in range(len(self.random_ncp.output_layer)):
+                y_train = self.y_train[:, i]
+                y_pred_train = where(pred[:, i] >= 0.5, 1, 0)
+                print('\tAccuracy for neuron %d: %.5f%%' % (i + 1, accuracy_score(y_train, y_pred_train) * 100))
+
         return str(f"NeuralNetwork, {self.metric.name}: {self.fitness:.4f}, Mutations: {self.mutation_level}, "
                    f"MemoUsage: {self.semantics_size:.2f}mb")
 
@@ -148,6 +172,7 @@ class NeuralNetwork(object):
         conv_layers = self.conv_layers.copy()
         non_conv_layers = self.non_conv_layers.copy()
         fitness = self.fitness
+        random_ncp = self.random_ncp
         return NeuralNetwork(seed=seed,
                              input_shape=input_shape,
                              n_outputs=n_outputs,
@@ -173,381 +198,317 @@ class NeuralNetwork(object):
                              conv_layers=conv_layers,
                              non_conv_layers=non_conv_layers,
                              validation_data=validation_data,
-                             validation_metric=validation_metric)
+                             validation_metric=validation_metric,
+                             random_ncp=random_ncp)
 
     def summary(self):
         return self.model.summary()
 
     def initialize_network(self):
         """Builds the first network and sets semantics and determines fitness"""
-        self.build_random_layers(self.initial_input_node)
-        self.get_semantics_initial_nodes()
+        self.build_random_layers()
+        # self.get_semantics_initial_nodes()
         self.semantics = self.output_node.semantics
         self.fitness = self._evaluate()
 
-    def build_random_layers(self, starting_node, concatenation_restricted=False):
-        self.build_random_conv(starting_node, concatenation_restricted)
-        self.build_fixed_dense()
+    def build_random_layers(self):
+        self.build_random_cp()
+        self.build_random_ncp()
 
-    # def _initialize_network(self):
-    #     """Builds the first network and sets semantics and determines fitness"""
-    #     self._build_random_layers(self.initial_input_node)
-    #     self.get_semantics_initial_nodes()
-    #     self.semantics = self.output_node.semantics
-    #     self.fitness = self._evaluate()
-    #
-    # def _build_random_layers(self, starting_node, concatenation_restricted=False):
-    #     if len(starting_node.output_shape) == 4:
-    #         self.build_random_conv(starting_node, concatenation_restricted)
-    #         self.build_random_non_conv(self.layers["conv"][self.mutation_level][-1], concatenation_restricted=True)
-    #         self.build_final_nodes()
-    #     else:
-    #         self.build_random_non_conv(starting_node, concatenation_restricted)
-    #         self.build_final_nodes()
+    def mutate_random_layers(self, mutate_conv):
 
-    def build_random_conv(self, starting_node, concatenation_restricted=False):
-        """
+        if mutate_conv:
+            self.mutate_random_cp()
+        """ TODO: -Lukas build_random_layers """
+        self.mutate_random_ncp(mutate_conv)
+        # self.build_fixed_dense()
 
-        :param starting_node: of type Node
-        :param concatenation_restricted:
-        :return:
-        """
+    def build_random_cp(self):
 
-        # initialize two variables
-        building_conv, nodes_wo_connection = True, [starting_node]
+        # setting initial values
+        building_cp = True
+        free_end_nodes = [self.initial_input_node]
 
-        while building_conv:  # True until only flatten() is chosen as a layer or reaches max_depth
-            nodes_wo_connection = [node for node in nodes_wo_connection if len(node.output_shape) == 4]  # Conv nodes!
-            to_connect_with_node = self.random_state.choice(nodes_wo_connection)  # one input to the next node
+        while building_cp:
 
-            only_flatten = to_connect_with_node.depth >= self.max_depth_cl or to_connect_with_node.only_flatten_test()
-            # case 1
-            if only_flatten:
-                self.conv_layers[self.mutation_level].append(FlattenNode(mutation_level=self.mutation_level,
-                                                                         input_node=to_connect_with_node))
+            if self.current_with < self.max_width_cl:
+                non_flattened_nodes = [node for node in self.get_all_conv_nodes() if len(node.output_shape) == 4]
+                random_node = self.random_state.choice(non_flattened_nodes)  # one input to the next node
+                if random_node.out_connections:  # the with of the network gets bigger:
+                    self.current_with += 1
             else:
-                no_splitting = self.current_with >= self.max_width_cl
+                non_flattened_nodes = [node for node in free_end_nodes if len(node.output_shape) == 4]
+                random_node = self.random_state.choice(non_flattened_nodes)  # one input to the next node
 
-                # case 2
-                if no_splitting:
-                    self.build_next_conv_node(to_connect_with_node, concatenation_restricted)
-                # case 3
-                else:
-                    n_possible_splits: int = min(self.max_width_cl - self.current_with, self.max_splits)
-                    splits = self.random_state.choice(list(range(n_possible_splits)))
-                    for split in range(splits + 1):
-                        self.current_with += 1
-                        self.build_next_conv_node(to_connect_with_node, concatenation_restricted)
+            only_flatten = random_node.depth >= self.max_depth_cl or random_node.only_flatten_test()
 
-            building_conv, nodes_wo_connection = self.check_conv_done()
+            if only_flatten:  # if the node has reached the max_depth it can only be connected with a flatten node
+                self.conv_layers[self.mutation_level].append(FlattenNode(mutation_level=self.mutation_level,
+                                                                         input_node=random_node))
+            else:  # everything is possible:
+                all_nodes = self.get_all_conv_nodes()  # all possible nodes of the network of the layer type
+                all_nodes.remove(random_node)
+                possible_concat_nodes = [node for node in all_nodes  # need to match the outer node in shape
+                                         if len(node.output_shape) > 2
+                                         and random_node.output_shape[1] == node.output_shape[1]
+                                         and random_node.output_shape[2] == node.output_shape[2]]
 
-        if len(nodes_wo_connection) > 1:  # concatenate all parallel layers to have one input for the dense layers
+                if possible_concat_nodes:  # if there are suitable nodes the current node could be merged with:
+                    node = self.random_state.choice([
+                                                    # "Flatten",
+                                                    None,
+                                                    "Concat"
+                                                    ])
+                    if node == "Concat":  # build the concatenation node
+                        concatenation_nodes = self.random_state.choice(possible_concat_nodes,
+                                                                       max(1, self.random_state.choice(
+                                                                           range(len(possible_concat_nodes)))),
+                                                                       replace=False).tolist()
+
+                        _unconnected_nodes = [node for node in concatenation_nodes if not node.out_connections]
+                        self.current_with = self.current_with - (len(_unconnected_nodes))  # if concat with nodes
+                        concatenation_nodes.append(random_node)
+                        self.conv_layers[self.mutation_level].append(
+                            MergeNode(mutation_level=self.mutation_level,
+                                      input_node=concatenation_nodes,
+                                      _computational_layer=keras.layers.Concatenate()))
+
+                    elif node is None:  # build the random conv node:
+                        self.conv_layers[self.mutation_level].append(ConvNode(mutation_level=self.mutation_level,
+                                                                              conv_parameters=self.conv_parameters,
+                                                                              pool_parameters=self.pool_parameters,
+                                                                              input_node=random_node,
+                                                                              random_state=self.random_state))
+
+                    else:  # build the flatten node:
+                        self.conv_layers[self.mutation_level].append(FlattenNode(mutation_level=self.mutation_level,
+                                                                                 input_node=random_node))
+
+                else:  # there are no suitable nodes to connect with only normal nodes can be added at this stage:
+                    node = self.random_state.choice([
+                                                    # "Flatten",
+                                                    None])
+
+                    if node is None:
+                        self.conv_layers[self.mutation_level].append(ConvNode(mutation_level=self.mutation_level,
+                                                                              conv_parameters=self.conv_parameters,
+                                                                              pool_parameters=self.pool_parameters,
+                                                                              input_node=random_node,
+                                                                              random_state=self.random_state))
+                    else:
+                        self.conv_layers[self.mutation_level].append(FlattenNode(mutation_level=self.mutation_level,
+                                                                                 input_node=random_node))
+
+            building_cp, free_end_nodes = self.check_conv_done()
+
+        if len(free_end_nodes) > 1:  # concatenate all parallel layers to have one input for the dense layers
             self.conv_layers[self.mutation_level].append(MergeNode(mutation_level=self.mutation_level,
-                                                                   input_node=nodes_wo_connection,
+                                                                   input_node=free_end_nodes,
                                                                    _computational_layer=keras.layers.Concatenate()))
         self.current_with = 1
+        self.get_semantics_initial_nodes()
 
     def check_conv_done(self):
-        nodes_wo_connection = [node for node in self.conv_layers[self.mutation_level] if not node.out_connections]
-        if not all(len(node.output_shape) == 2 for node in nodes_wo_connection):  # if not all nodes are flat
+        free_end_nodes = [node for node in self.conv_layers[self.mutation_level] if not node.out_connections]
+        if not all(len(node.output_shape) == 2 for node in free_end_nodes):  # if not all nodes are flat
             # evaluates if output tensor shape is flattened or not
             building_cl = True  # here the nodes will be a input node after random choice
         else:
             building_cl = False  # here they will be finally concatenated and represent a Bottleneck:
-        return building_cl, nodes_wo_connection
+        return building_cl, free_end_nodes
 
-    def build_next_conv_node(self, to_connect_with_node, concatenation_restricted):
+    def mutate_random_cp(self):
 
-        if concatenation_restricted:  # just build a node
-            # node = self.random_state.choice([FlattenNode(mutation_level=self.mutation_level,
-            #                                              input_node=to_connect_with_node),
-            #                                  ConvNode(mutation_level=self.mutation_level,
-            #                                           conv_parameters=self.conv_parameters,
-            #                                           pool_parameters=self.pool_parameters,
-            #                                           input_node=to_connect_with_node,
-            #                                           random_state=self.random_state)])
-            self.conv_layers[self.mutation_level].append(ConvNode(mutation_level=self.mutation_level,
-                                                      conv_parameters=self.conv_parameters,
-                                                      pool_parameters=self.pool_parameters,
-                                                      input_node=to_connect_with_node,
-                                                      random_state=self.random_state))
-        else:
-            # a node can be concatenated if it has the same shape
-            all_nodes = self.get_all_conv_nodes()  # all possible nodes of the network of the layer type
-            possible_concat_nodes = [node for node in all_nodes  # need to match the outer node in shape
-                                     if len(node.output_shape) > 2  # todo make more efficient on node level
-                                     and to_connect_with_node.output_shape[1] == node.output_shape[1]
-                                     and to_connect_with_node.output_shape[2] == node.output_shape[2]]
+        # setting initial values
+        building_cp = True
+        random_node = self.random_mutation_node()
+        warm_start = True
 
-            if self.conv_layers[self.mutation_level]:
-                possible_concat_nodes.remove(to_connect_with_node)
-            if not possible_concat_nodes:  # if there are no nodes with the same shape as the input node
-                concat_possible = False
-            else:
-                concat_possible = True
-
-            # case 1
-            if not concat_possible:
-                # node = self.random_state.choice([FlattenNode(mutation_level=self.mutation_level,
-                #                                              input_node=to_connect_with_node),
-                #                                  ConvNode(mutation_level=self.mutation_level,
-                #                                           conv_parameters=self.conv_parameters,
-                #                                           pool_parameters=self.pool_parameters,
-                #                                           input_node=to_connect_with_node,
-                #                                           random_state=self.random_state)])
-                self.conv_layers[self.mutation_level].append(ConvNode(mutation_level=self.mutation_level,
-                                                          conv_parameters=self.conv_parameters,
-                                                          pool_parameters=self.pool_parameters,
-                                                          input_node=to_connect_with_node,
-                                                          random_state=self.random_state))
-
-            # case 2
-            elif concat_possible:
-                node = self.random_state.choice([#"Flatten",
-                                                 None,
-                                                 "Concat"])
-                if node == "Concat":
-                    concat_nodes = self.random_state.choice(possible_concat_nodes,
-                                                            # basically chose x where x is distributed as half a gaussian but it needs revise
-                                                            get_truncated_normal(upp=len(
-                                                                possible_concat_nodes)))  # todo change this as it is not just want you want please see with upp 3 it is very likly
-
-                    to_connect_with_node = [to_connect_with_node]
-
-                    if isinstance(concat_nodes, list):
-                        to_connect_with_node.extend(concat_nodes)
-                        _unconnected_nodes = [node for node in concat_nodes if not node.out_connections]
-                        self.current_with = self.current_with - (
-                            len(_unconnected_nodes))  # if i concatenate with unconnected nodes
-                    else:
-                        to_connect_with_node.append(concat_nodes)
-                        if not concat_nodes.out_connections:
-                            self.current_with -= 1
-
-                    self.conv_layers[self.mutation_level].append(MergeNode(mutation_level=self.mutation_level,
-                                                                           input_node=to_connect_with_node,
-                                                                           _computational_layer=keras.layers.Concatenate()))
+        while building_cp:
+            if not warm_start:
+                if self.current_with < self.max_width_cl:
+                    non_flattened_nodes = [node for node in self.get_all_conv_nodes() if len(node.output_shape) == 4]
+                    random_node = self.random_state.choice(non_flattened_nodes)  # one input to the next node
+                    if random_node.out_connections:  # the with of the network gets bigger:
+                        self.current_with += 1
                 else:
-                    # node = self.random_state.choice([FlattenNode(mutation_level=self.mutation_level,
-                    #                                              input_node=to_connect_with_node),
-                    #                                  ConvNode(mutation_level=self.mutation_level,
-                    #                                           conv_parameters=self.conv_parameters,
-                    #                                           pool_parameters=self.pool_parameters,
-                    #                                           input_node=to_connect_with_node,
-                    #                                           random_state=self.random_state)])
-                    self.conv_layers[self.mutation_level].append(ConvNode(mutation_level=self.mutation_level,
-                                                              conv_parameters=self.conv_parameters,
-                                                              pool_parameters=self.pool_parameters,
-                                                              input_node=to_connect_with_node,
-                                                              random_state=self.random_state))
-                    self.current_with += 1  # todo revise
+                    non_flattened_nodes = [node for node in free_end_nodes if len(node.output_shape) == 4]
+                    random_node = self.random_state.choice(non_flattened_nodes)  # one input to the next node
 
-    def build_fixed_dense(self):
+            only_flatten = random_node.depth >= self.max_depth_cl or random_node.only_flatten_test()
 
-        """Builds the dense layer part
-                for the moment it is static but could easily be adapted to work as a SLM"""
-        kernel_initializer = keras.initializers.RandomNormal(seed=self.random_state.randint(sys.maxsize))
-        self.non_conv_layers[self.mutation_level].append(DenseNode(mutation_level=self.mutation_level,
-                                                                   random_state=self.random_state,
-                                                                   input_node=self.conv_layers[self.mutation_level][
-                                                                       -1],
-                                                                   _computational_layer=keras.layers.Dense(
-                                                                       20,
-                                                                       activation='relu',
-                                                                       kernel_initializer=kernel_initializer)))
+            if only_flatten:  # if the node has reached the max_depth it can only be connected with a flatten node
+                self.conv_layers[self.mutation_level].append(FlattenNode(mutation_level=self.mutation_level,
+                                                                         input_node=random_node))
+            else:  # everything is possible:
+                all_nodes = self.get_all_conv_nodes()  # all possible nodes of the network of the layer type
+                all_nodes.remove(random_node)
+                possible_concat_nodes = [node for node in all_nodes  # need to match the outer node in shape
+                                         if len(node.output_shape) > 2
+                                         and random_node.output_shape[1] == node.output_shape[1]
+                                         and random_node.output_shape[2] == node.output_shape[2]]
 
-        self.build_final_nodes()
+                if possible_concat_nodes:  # if there are suitable nodes the current node could be merged with:
+                    node = self.random_state.choice(["Flatten", None, "Concat"])
+                    if node == "Concat":  # build the concatenation node
+                        concatenation_nodes = self.random_state.choice(possible_concat_nodes,
+                                                                       max(1, self.random_state.choice(
+                                                                           range(len(possible_concat_nodes)))),
+                                                                       replace=False).tolist()
 
-    # def build_randome_dense(self):
-    #
-    #     """Builds the dense layer part
-    #             for the moment it is static but could easily be adapted to work as a SLM"""
-    #     self.non_conv_layers[self.mutation_level].append(DenseNode(mutation_level=self.mutation_level,
-    #                                                                seed=self.random_state,
-    #                                                                input_node=self.layers["conv"][self.mutation_level][
-    #                                                                    -1],
-    #                                                                layer_type="non_conv"
-    #                                                                ))
-    #
-    #     self.build_final_nodes()
+                        _unconnected_nodes = [node for node in concatenation_nodes if not node.out_connections]
+                        self.current_with = self.current_with - (len(_unconnected_nodes))  # if concat with nodes
+                        concatenation_nodes.append(random_node)
+                        self.conv_layers[self.mutation_level].append(
+                            MergeNode(mutation_level=self.mutation_level,
+                                      input_node=concatenation_nodes,
+                                      _computational_layer=keras.layers.Concatenate()))
+
+                    elif node is None:  # build the random conv node:
+                        self.conv_layers[self.mutation_level].append(ConvNode(mutation_level=self.mutation_level,
+                                                                              conv_parameters=self.conv_parameters,
+                                                                              pool_parameters=self.pool_parameters,
+                                                                              input_node=random_node,
+                                                                              random_state=self.random_state))
+
+                    else:  # build the flatten node:
+                        self.conv_layers[self.mutation_level].append(FlattenNode(mutation_level=self.mutation_level,
+                                                                                 input_node=random_node))
+
+                else:  # there are no suitable nodes to connect with only normal nodes can be added at this stage:
+                    node = self.random_state.choice(["Flatten", None])
+
+                    if node is None:
+                        self.conv_layers[self.mutation_level].append(ConvNode(mutation_level=self.mutation_level,
+                                                                              conv_parameters=self.conv_parameters,
+                                                                              pool_parameters=self.pool_parameters,
+                                                                              input_node=random_node,
+                                                                              random_state=self.random_state))
+                    else:
+                        self.conv_layers[self.mutation_level].append(FlattenNode(mutation_level=self.mutation_level,
+                                                                                 input_node=random_node))
+
+            building_cp, free_end_nodes = self.check_conv_done()
+
+
+            warm_start = False
+
+        if len(free_end_nodes) > 1:  # concatenate all parallel layers to have one input for the dense layers
+            self.conv_layers[self.mutation_level].append(MergeNode(mutation_level=self.mutation_level,
+                                                                   input_node=free_end_nodes,
+                                                                   _computational_layer=keras.layers.Concatenate()))
+        self.current_with = 1
+        self.get_semantics_mutation_nodes()
+
+    def build_random_ncp(self, feed_original_X=False):
+
+        input_layer = list()
+
+        if feed_original_X:
+            original_X = self.x_train
+            channels = original_X.shape[3]
+            for i in range(channels):
+                X = original_X[:, :, :, i]
+                X = X.reshape((X.shape[0], X.shape[1] * X.shape[2]))
+                for input_data in X.T:
+                    input_layer.append(InputNeuron(input_data))
+
+
+        else:
+            print("Network build based on random conv")
+            for input_semantics in self.conv_layers[0][-1].semantics.T:
+                input_layer.append(InputNeuron(input_semantics))
+
+        """ TODO: -Lukas build_random_ncp, values from the convolutional part need to be added to the input layer """
+
+        number_of_hidden_layers = self.random_state.randint(1, 1 + 1)
+        number_of_hidden_neurons = [self.random_state.randint(5, 10 + 1) for _ in range(number_of_hidden_layers)]
+        number_of_hidden_neurons[-1] = 100
+
+        y = self.y_train
+        number_of_output_neurons = y.shape[1]
+        maximum_neuron_connection_weight = 0.1
+        maximum_bias_weight = 0.1
+        activation_function = 'identity'
+        sparseness = {'sparse': True, 'minimum_sparseness': 0.75, 'maximum_sparseness': 1,
+                      'prob_skip_connection': 0}
+        hidden_activation_functions_ids = ['relu']
+        prob_activation_hidden_layers = 1
+        nn = NeuralNetworkBuilder.generate_new_neural_network(number_of_hidden_layers, number_of_hidden_neurons,
+                                                              number_of_output_neurons,
+                                                              maximum_neuron_connection_weight, maximum_bias_weight,
+                                                              activation_function, input_layer, self.random_state,
+                                                              sparseness, hidden_activation_functions_ids,
+                                                              prob_activation_hidden_layers)
+
+        calculate_ols(nn, num_last_neurons=nn.get_number_last_hidden_neurons(), target=y)
+        nn.calculate_output_semantics()
+        nn.clean_hidden_semantics()
+
+        self.output_node = nn
+        self.output_node.semantics = self.output_node.get_predictions()
+        self.random_ncp = nn
+
+    def mutate_random_ncp(self, mutate_conv):
+        child_nn = NeuralNetworkBuilder.clone_neural_network(self.random_ncp)
+
+        if mutate_conv:
+            for input_semantics in self.conv_layers[self.mutation_level][-1].semantics.T:
+                child_nn.input_layer.append(InputNeuron(input_semantics))
+
+        learning_step = 'optimized'
+        sparseness = {'sparse': True, 'minimum_sparseness': 0.75, 'maximum_sparseness': 1,
+                      'prob_skip_connection': 0}
+
+        # maximum_new_neurons_per_layer = 5
+        maximum_new_neurons_per_layer = 50
+
+        maximum_neuron_connection_weight = 0.1
+        maximum_bias_weight = 0.1
+
+        y = self.y_train
+        global_preds = self.output_node.semantics
+        delta_target = y - global_preds
+        hidden_activation_functions_ids = ['relu']
+        prob_activation_hidden_layers = 1
+        child_nn = mutate_hidden_layers(child_nn, self.random_state, learning_step, sparseness,
+                                        maximum_new_neurons_per_layer, maximum_neuron_connection_weight,
+                                        maximum_bias_weight, delta_target, y, global_preds,
+                                        hidden_activation_functions_ids, prob_activation_hidden_layers)
+
+        child_nn.clean_hidden_semantics()
+
+        self.output_node = child_nn
+        self.output_node.semantics = self.output_node.get_predictions()
+        self.random_ncp = child_nn
 
     def get_last_nodes(self):
         return [sublist[-1] for sublist in self.non_conv_layers.values()]
 
-    # def build_random_non_conv(self, starting_node, concatenation_restricted=False):
-    #
-    #     # skip connections?
-    #     # how many layer
-    #     building_non_conv, nodes_wo_connection, layer_type = True, [starting_node], "non_conv"
-    #     while building_non_conv:
-    #         to_connect_with_node = self.random_state.choice(nodes_wo_connection)  # one input to the next node
-    #
-    #         # case 2
-    #         if self.current_with >= self.max_width_non_conv:
-    #             self.build_next_non_conv_node(to_connect_with_node, concatenation_restricted)
-    #         # case 3
-    #         else:
-    #             n_possible_splits: int = min(self.max_width_non_conv - self.current_with, self.max_splits)
-    #             splits = self.random_state.choice(list(range(n_possible_splits)))
-    #             for split in range(splits + 1):
-    #                 self.current_with += 1
-    #                 self.build_next_non_conv_node(to_connect_with_node, concatenation_restricted)
-    #
-    #         building_non_conv, nodes_wo_connection = self.check_non_conv_done()
-    #
-    #     if len(nodes_wo_connection) > 1:  # concatenate all parallel layers to have one input for the dense layers
-    #         self.layers[layer_type][self.mutation_level].append(Node(mutation_level=self.mutation_level,
-    #                                                                  non_conv_parameters=self.non_conv_parameters,
-    #                                                                  seed=self.random_state,
-    #                                                                  input_node=nodes_wo_connection,
-    #                                                                  _computational_layer=keras.layers.Concatenate(),
-    #                                                                  layer_type="non_conv"))
-    #
-    #     # case dependant output  # todo separate classes for separate tasks
-    #
-    # def check_non_conv_done(self):
-    #     nodes_wo_conn = [node for node in self.layers["non_conv"][self.mutation_level] if not node.out_connections]
-    #
-    #     return self.layers["non_conv"][self.mutation_level][-1].depth <= self.max_depth_non_conv, nodes_wo_conn
-    #
-    # def build_next_non_conv_node(self, to_connect_with_node, concatenation_restricted=True):
-    #
-    #     if concatenation_restricted:  # just build a node
-    #         self.layers["non_conv"][self.mutation_level].append(Node(mutation_level=self.mutation_level,
-    #                                                                  non_conv_parameters=self.non_conv_parameters,
-    #                                                                  input_node=to_connect_with_node,
-    #                                                                  _computational_layer=None,
-    #                                                                  seed=self.random_state,
-    #                                                                  layer_type="non_conv"))
-    #     else:
-    #         # a node can be concatenated if it has the same shape
-    #         possible_concat_nodes = [item for sublist in self.layers["non_conv"].values() for item in sublist]
-    #         possible_concat_nodes.append(self.initial_input_node)
-    #         # all possible nodes of the network of the layer type
-    #         if self.layers["non_conv"][self.mutation_level]:  # todo if flatten layer
-    #             possible_concat_nodes.remove(to_connect_with_node)
-    #
-    #         if not possible_concat_nodes:  # if there are no nodes with the same shape as the input node
-    #             concat_possible = False
-    #         else:
-    #             concat_possible = True
-    #
-    #         # case 1
-    #         if not concat_possible:
-    #             self.layers["non_conv"][self.mutation_level].append(Node(mutation_level=self.mutation_level,
-    #                                                                      non_conv_parameters=self.non_conv_parameters,
-    #                                                                      input_node=to_connect_with_node,
-    #                                                                      _computational_layer=None,
-    #                                                                      seed=self.random_state,
-    #                                                                      layer_type="non_conv"))
-    #
-    #         # case 2
-    #         elif concat_possible:
-    #             _computational_layer = self.random_state.choice([None,
-    #                                                              keras.layers.Concatenate()])
-    #             if isinstance(_computational_layer, keras.layers.Concatenate):
-    #                 concat_nodes = self.random_state.choice(possible_concat_nodes,
-    #                                                         # basically chose x where x is distributed as half a gaussian but it needs revise
-    #                                                         get_truncated_normal(upp=len(
-    #                                                             possible_concat_nodes)))  # todo change this as it is not just want you want please see with upp 3 it is very likly
-    #
-    #                 to_connect_with_node = [to_connect_with_node]
-    #
-    #                 if isinstance(concat_nodes, list):
-    #                     to_connect_with_node.extend(concat_nodes)
-    #                     _unconnected_nodes = [node for node in concat_nodes if not node.out_connections]
-    #                     self.current_with = self.current_with - (
-    #                         len(_unconnected_nodes))  # if i concatenate with unconnected nodes
-    #                 else:
-    #                     to_connect_with_node.append(concat_nodes)
-    #                     if not concat_nodes.out_connections:
-    #                         self.current_with -= 1
-    #
-    #                 self.layers["non_conv"][self.mutation_level].append(Node(mutation_level=self.mutation_level,
-    #                                                                          non_conv_parameters=self.non_conv_parameters,
-    #                                                                          input_node=to_connect_with_node,
-    #                                                                          _computational_layer=_computational_layer,
-    #                                                                          seed=self.random_state,
-    #                                                                          layer_type="non_conv"))
-    #             else:
-    #                 self.layers["non_conv"][self.mutation_level].append(Node(mutation_level=self.mutation_level,
-    #                                                                          non_conv_parameters=self.non_conv_parameters,
-    #                                                                          input_node=to_connect_with_node,
-    #                                                                          _computational_layer=_computational_layer,
-    #                                                                          seed=self.random_state,
-    #                                                                          layer_type="non_conv"))
-    #                 self.current_with += 1
-
-    def build_final_nodes(self):  # Here Classification
-        """
-        Because the Crossentropy which is the usual loss for classification requires each prediction to resemble a
-        propability distribution we need to ensure that each output prediction is within [0,1] with sum = 1
-        :return:
-        """
-
-        if self.metric.type is "regression":
-            activations = ["tanh", "linear"]
-        elif self.metric.type is "classification":
-            activations = ["tanh", "softmax"]
-        else:
-            raise ValueError
-
-        kernel_initializer = keras.initializers.RandomNormal(seed=self.random_state.randint(sys.maxsize))
-        self.non_conv_layers[self.mutation_level].append(DenseNode(mutation_level=self.mutation_level,
-                                                                   input_node=
-                                                                   self.non_conv_layers[self.mutation_level][-1],
-                                                                   random_state=self.random_state,
-                                                                   _computational_layer=keras.layers.Dense(
-                                                                       self.n_outputs,
-                                                                       activation=activations[0],
-                                                                       kernel_initializer=kernel_initializer)))
-        if self.mutation_level == 0:
-            self.pre_output_node[self.mutation_level] = self.non_conv_layers[self.mutation_level][
-                -1]
-
-            # output for the initial network is the last node
-        else:
-            last_pre_output = self.pre_output_node[self.mutation_level - 1]
-            last_node_current = self.non_conv_layers[self.mutation_level][-1]
-            self.pre_output_node[self.mutation_level] = (MergeNode(mutation_level=self.mutation_level,
-                                                                   input_node=[last_pre_output, last_node_current],
-                                                                   _computational_layer=keras.layers.Add()))
-            # maybe also using average or something else?
-        # self.output_node = DenseNode(mutation_level=self.mutation_level,
-        #                              input_node=self.pre_output_node[self.mutation_level],
-        #                              random_state=self.random_state,
-        #                              _computational_layer=keras.layers.Dense(
-        #                                  self.n_outputs,
-        #                                  activation=activations[1],
-        #                                  kernel_initializer="Identity", bias_initializer="Zeros"))
-        self.output_node = self.pre_output_node[self.mutation_level]
-
     def get_semantics_initial_nodes(self):
         """builds a model to return the semantics for all nodes and saves them to each node"""
         input_node = self.initial_input_node.computational_layer
-        output_nodes = [node for node in self.conv_layers[
-            self.mutation_level]]
-        output_nodes.extend([node for node in self.non_conv_layers[
-            self.mutation_level]])
-        output_nodes.append(self.pre_output_node[self.mutation_level])
-        output_nodes.append(self.output_node)
+        output_nodes = [node for node in self.conv_layers[self.mutation_level]]
         output_nodes_layer = [node.computational_layer for node in output_nodes]
 
         model_for_semantics = keras.models.Model(inputs=input_node, outputs=output_nodes_layer)
         semantics = model_for_semantics.predict(self.x_train)
         self.semantics_size += sum([sem.nbytes for sem in semantics]) / 1.E6
-        [setattr(output_nodes[idx], 'semantics', i) for idx, i in enumerate(semantics)]  # try for loop
+
+        if len(output_nodes) > 1:
+            [setattr(output_nodes[idx], 'semantics', i) for idx, i in enumerate(semantics)]
+        else:
+            setattr(output_nodes[0], 'semantics', semantics)
         self.initial_input_node.semantics = self.x_train
 
-    def isolated_mutation(self):
+    def mutation(self):
         """Mutate the network such that a graph with only one touch-point is added to the network
         returns the network, contains more than one neuron per layer """
         self.mutation_level += 1
         self.conv_layers[self.mutation_level] = []
         self.non_conv_layers[self.mutation_level] = []
-        mutation_node = self.random_mutation_node()  # choose a staring node
-        self.build_random_layers(starting_node=mutation_node, concatenation_restricted=True)
-        self.get_semantics_mutation_nodes()
+        mutation_point = self.random_state.choice([True, False])  # choose a staring point
+        self.mutate_random_layers(mutate_conv=mutation_point)
         self.semantics = self.output_node.semantics
         self.fitness = self._evaluate()
         return self
@@ -584,14 +545,22 @@ class NeuralNetwork(object):
         with a list of the semantic inputs resembling a keras.layer.input and the associated data to the input"""
         semantic_input_nodes = flatten([node.semantic_input_node for node in self.conv_layers[self.mutation_level]
                                         if node.semantic_input])
+
         semantic_input_nodes.extend(flatten([node.semantic_input_node for node in
                                              self.non_conv_layers[self.mutation_level] if node.semantic_input]))
-        semantic_input_nodes.append(self.pre_output_node[self.mutation_level].semantic_input_node[0])
+
+        """ TODO: -Lukas get_semantic_inputs """
+        if self.random_ncp is None:
+            semantic_input_nodes.append(self.pre_output_node[self.mutation_level].semantic_input_node[0])
+
         semantic_data = flatten([node.input_data for node in self.conv_layers[self.mutation_level]
                                  if node.semantic_input])
         semantic_data.extend(flatten([node.input_data for node in self.non_conv_layers[self.mutation_level]
                                       if node.semantic_input]))
-        semantic_data.append(self.pre_output_node[self.mutation_level].input_data[0])
+
+        """ TODO: -Lukas get_semantic_inputs """
+        if self.random_ncp is None:
+            semantic_data.append(self.pre_output_node[self.mutation_level].input_data[0])
 
         return semantic_input_nodes, semantic_data
 
@@ -599,15 +568,17 @@ class NeuralNetwork(object):
         """gets the semantics for all newly added nodes in this mutation"""
         semantic_input_nodes, semantic_data = self.get_semantic_inputs()  # get the input nodes and the data
         output_nodes = [node for node in self.conv_layers[self.mutation_level]]
-        output_nodes.extend([node for node in self.non_conv_layers[self.mutation_level]])
-        output_nodes.append(self.pre_output_node[self.mutation_level])
-        output_nodes.append(self.output_node)
+
         output_nodes_semantics = [node.semantics_computational_layer for node in output_nodes]
         model_for_semantics = keras.models.Model(inputs=semantic_input_nodes,
                                                  outputs=output_nodes_semantics)  # build the model_for_semantics
         semantics = model_for_semantics.predict(semantic_data)
         self.semantics_size += sum([sem.nbytes for sem in semantics]) / 1.E6
-        [setattr(output_nodes[idx], 'semantics', i) for idx, i in enumerate(semantics)]
+        """ TODO: -Lukas get_semantics_mutation_nodes """
+        if len(output_nodes) > 1:
+            [setattr(output_nodes[idx], 'semantics', i) for idx, i in enumerate(semantics)]
+        else:
+            setattr(output_nodes[0], 'semantics', semantics)
 
     def random_mutation_node(self):
         """:returns any Node"""
@@ -622,8 +593,8 @@ class NeuralNetwork(object):
         all_nodes.append(self.initial_input_node)
         return all_nodes
 
-    def get_all_conv_nodes(self, ):
-        """ :returns list of all Nodes depending on the layer_type"""  # todo
+    def get_all_conv_nodes(self):
+        """ :returns list of all Nodes of conv layer_type"""  # todo
         all_nodes = [item for sublist in self.conv_layers.values() for item in sublist]
         all_nodes.append(self.initial_input_node)
         return all_nodes
@@ -636,7 +607,9 @@ class NeuralNetwork(object):
 
     def _evaluate(self):
         """"evaluates the network while training"""
-        return self.metric.evaluate(prediction=self.semantics, target=self.y_train)
+        """ TODO: -Lukas _evaluate """
+        return self.metric.evaluate(prediction=self.semantics.clip(0, 1), target=self.y_train)
+        # return self.metric.evaluate(prediction=self.semantics, target=self.y_train)
 
     def set_model(self):
         """builds the keras model only needed for validation"""
@@ -647,12 +620,18 @@ class NeuralNetwork(object):
         if self.validation_data is None:
             raise ValueError(
                 f"Need to pass Validation data, in the form of [xtest, ytest]. Cant validate on {self.validation_data}")
-        self.set_model()
-        y_pred = self.model.predict(self.validation_data[0])
-        del self.model  # not needed anymore
-        """"evaluates the network on test data"""
-        return self.metric.evaluate(prediction=y_pred, target=self.validation_data[1]), self.validation_metric.evaluate(
-            prediction=y_pred, target=self.validation_data[1])
+
+        """ TODO: -Lukas evaluate """
+        if self.random_ncp is None:
+            self.set_model()
+            y_pred = self.model.predict(self.validation_data[0])
+            del self.model  # not needed anymore
+            """"evaluates the network on test data"""
+            return self.metric.evaluate(prediction=y_pred,
+                                        target=self.validation_data[1]), self.validation_metric.evaluate(
+                prediction=y_pred, target=self.validation_data[1])
+        else:
+            return 0
 
     def predict(self, data):
         return self.model.predict(data)
@@ -662,6 +641,19 @@ class NeuralNetwork(object):
         _conv_parameters = [[1], kernel_sizes, strides, padding, activations]
         _non_conv_parameters = [[1], activations]
         return list(product(*_conv_parameters)), list(product(*_non_conv_parameters))
+
+
+def mutation_map(NN):
+    """Mutate the network such that a graph with only one touch-point is added to the network
+    returns the network, contains more than one neuron per layer """
+    NN.mutation_level += 1
+    NN.conv_layers[NN.mutation_level] = []
+    NN.non_conv_layers[NN.mutation_level] = []
+    mutation_point = NN.random_state.choice([True, False])  # choose a staring point
+    NN.mutate_random_layers(mutate_conv=mutation_point)
+    NN.semantics = NN.output_node.semantics
+    NN.fitness = NN._evaluate()
+    return NN
 
 
 if __name__ == '__main__':

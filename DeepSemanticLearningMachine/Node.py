@@ -177,7 +177,7 @@ class ConvNode(Node):
 
 
 class MergeNode(Node):
-    def __init__(self, mutation_level,input_node, _computational_layer):
+    def __init__(self, mutation_level, input_node, _computational_layer):
         super().__init__(mutation_level, input_node)
         self._computational_layer = _computational_layer
         self._set_computational_layer()
@@ -207,7 +207,8 @@ class MergeNode(Node):
                 self._connect_merge_layers(input_nodes)
 
             # connect nodes from different mutation level with new semantic input
-            elif len(set(mutation_levels)) != 1:
+            # elif len(set(mutation_levels)) != 1:
+            else:
                 self.semantic_input = True  # to filter for input nodes
                 # get all nodes with new semantic input and other:
                 no_new_semantic_input = [node.semantics_computational_layer for node in self.input_node if
@@ -224,9 +225,9 @@ class MergeNode(Node):
                 self.semantics_computational_layer = self._computational_layer(self.semantic_input_node +
                                                                                no_new_semantic_input)
                 self._connect_merge_layers(input_nodes)
-
-            else:
-                raise ValueError("Something is wrong!")
+            #
+            # else:
+            #     raise ValueError("Something is wrong!")
 
     def only_flatten_test(self):
         """Makes sure that dimensions don't get negative"""

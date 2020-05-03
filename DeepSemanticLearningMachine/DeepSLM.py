@@ -1,12 +1,14 @@
 from Hillclimbing.Hillclimbing import Hillclimbing
 from DeepSemanticLearningMachine.NeuralNetwork import NeuralNetwork
+
 import numpy as np
 from algorithem.Metric import new_elite, CCE
 import gc
 from itertools import combinations_with_replacement, product
 
 
-class DeepSLM(Hillclimbing):  # todo only for classification for now it should become abstract to also be for non image datasets
+class DeepSLM(
+    Hillclimbing):  # todo only for classification for now it should become abstract to also be for non image datasets
     """
     Parameters:
         layer_parameters: {'filters': list of Integers, the dimensionality of the output space (i.e. the number of
@@ -86,7 +88,8 @@ class DeepSLM(Hillclimbing):  # todo only for classification for now it should b
                                            validation_data=validation_data,
                                            validation_metric=validation_metric
                                            ) for _ in range(self.neighborhood_size)]
-        self.neighborhood = sorted(self.neighborhood, key=lambda x: x.fitness, reverse=self.metric.greater_is_better)  # argmax
+        self.neighborhood = sorted(self.neighborhood, key=lambda x: x.fitness,
+                                   reverse=self.metric.greater_is_better)  # argmax
         self.elite = self.neighborhood[0]
         if verbose:
             self._verbose_reporter()
@@ -95,7 +98,7 @@ class DeepSLM(Hillclimbing):  # todo only for classification for now it should b
 
         for generation in range(100):
             self.current_generation += 1
-            self.neighborhood = [self.elite.copy().isolated_mutation() for _ in
+            self.neighborhood = [self.elite.copy().mutation() for _ in
                                  range(self.neighborhood_size)]
             self.elite = self._get_elite()
             if verbose:
