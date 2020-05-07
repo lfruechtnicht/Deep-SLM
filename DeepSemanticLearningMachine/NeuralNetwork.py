@@ -141,6 +141,7 @@ class NeuralNetwork(object):
         return self._copy()
 
     def copy(self):
+        print("Number of Input_Neurons in NCP: ",len(self.random_ncp.input_layer), " Number of Neurons in the last layer of the cp: ", self.conv_layers[0][-1].output_shape[1])
         return self._copy()
 
     def _copy(self):
@@ -172,7 +173,7 @@ class NeuralNetwork(object):
         conv_layers = self.conv_layers.copy()
         non_conv_layers = self.non_conv_layers.copy()
         fitness = self.fitness
-        random_ncp = self.random_ncp
+        random_ncp = NeuralNetworkBuilder.clone_neural_network(self.random_ncp)
         return NeuralNetwork(seed=seed,
                              input_shape=input_shape,
                              n_outputs=n_outputs,
@@ -255,10 +256,10 @@ class NeuralNetwork(object):
 
                 if possible_concat_nodes:  # if there are suitable nodes the current node could be merged with:
                     node = self.random_state.choice([
-                                                    # "Flatten",
-                                                    None,
-                                                    "Concat"
-                                                    ])
+                        # "Flatten",
+                        None,
+                        "Concat"
+                    ])
                     if node == "Concat":  # build the concatenation node
                         concatenation_nodes = self.random_state.choice(possible_concat_nodes,
                                                                        max(1, self.random_state.choice(
@@ -286,8 +287,8 @@ class NeuralNetwork(object):
 
                 else:  # there are no suitable nodes to connect with only normal nodes can be added at this stage:
                     node = self.random_state.choice([
-                                                    # "Flatten",
-                                                    None])
+                        # "Flatten",
+                        None])
 
                     if node is None:
                         self.conv_layers[self.mutation_level].append(ConvNode(mutation_level=self.mutation_level,
@@ -390,7 +391,6 @@ class NeuralNetwork(object):
 
             building_cp, free_end_nodes = self.check_conv_done()
 
-
             warm_start = False
 
         if len(free_end_nodes) > 1:  # concatenate all parallel layers to have one input for the dense layers
@@ -476,7 +476,7 @@ class NeuralNetwork(object):
                                         maximum_bias_weight, delta_target, y, global_preds,
                                         hidden_activation_functions_ids, prob_activation_hidden_layers)
 
-        child_nn.clean_hidden_semantics()
+        child_nn.clean_hidden_semantics()  # todo ask ivo why this mus happen?
 
         self.output_node = child_nn
         self.output_node.semantics = self.output_node.get_predictions()
@@ -558,10 +558,6 @@ class NeuralNetwork(object):
         semantic_data.extend(flatten([node.input_data for node in self.non_conv_layers[self.mutation_level]
                                       if node.semantic_input]))
 
-        """ TODO: -Lukas get_semantic_inputs """
-        if self.random_ncp is None:
-            semantic_data.append(self.pre_output_node[self.mutation_level].input_data[0])
-
         return semantic_input_nodes, semantic_data
 
     def get_semantics_mutation_nodes(self):
@@ -631,10 +627,27 @@ class NeuralNetwork(object):
                                         target=self.validation_data[1]), self.validation_metric.evaluate(
                 prediction=y_pred, target=self.validation_data[1])
         else:
-            return 0
+            self.get_intermediate_predictions()
 
-    def predict(self, data):
-        return self.model.predict(data)
+    def get_bottleneck_nodes(self):
+        """ :returns the computational_layer for the last node in each mutation step"""
+        print(type(self.conv_layers.values()))
+        return [nodes[-1].computational_layer for nodes in self.conv_layers.values() if nodes]
+
+    def get_intermediate_predictions(self, X=None):
+
+        bottleneck_nodes = self.get_bottleneck_nodes()
+        model_for_predictions = Model(inputs=self.initial_input_node.computational_layer, outputs=bottleneck_nodes)
+
+        if X:
+            self.bollleneck_predictions = model_for_predictions.predict(X)
+        else:
+            self.bollleneck_predictions = model_for_predictions.predict(self.validation_data[0])
+
+    def predict(self, X=None):
+        self.get_intermediate_predictions(X=X)
+        y_pred = self.random_ncp.generate_predictions(X=self.bollleneck_predictions)
+        return y_pred
 
     def _set_parameters_one_filter(self):
         filters, kernel_sizes, strides, padding, activations, pool_size, neurons = self.layer_parameters.values()

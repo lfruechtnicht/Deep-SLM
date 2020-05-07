@@ -592,7 +592,6 @@ class NeuralNetworkBuilder:
 
             output_layer.append(cloned_output_neuron)
 
-        # Note: The input layer does not need to be recreated because its values will not change in an immediate future.
         clone = NeuralNetwork(neural_network.input_layer, hidden_layers, output_layer)
         clone.update_parent(neural_network.is_better_than_parent())
         clone.update_loss(neural_network.get_loss())

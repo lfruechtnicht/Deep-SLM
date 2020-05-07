@@ -68,4 +68,6 @@ DSLM = DeepSLM(RootMeanSquaredError, seed=4, max_depth_cl=10, max_width_cl=1, ma
 #===============================================================================
 DSLM.fit(x_train, y_train, validation_data=(x_test, y_test), verbose=True, validation_metric=Accurarcy)  # todo validation true false
 
+
+
 """WARNING: HIGH MEMORY REQUIREMENTS! TESTED ONLY WITH 16GB"""

@@ -90,6 +90,7 @@ class DeepSLM(
                                            ) for _ in range(self.neighborhood_size)]
         self.neighborhood = sorted(self.neighborhood, key=lambda x: x.fitness,
                                    reverse=self.metric.greater_is_better)  # argmax
+        print("test")
         self.elite = self.neighborhood[0]
         if verbose:
             self._verbose_reporter()
@@ -101,6 +102,7 @@ class DeepSLM(
             self.neighborhood = [self.elite.copy().mutation() for _ in
                                  range(self.neighborhood_size)]
             self.elite = self._get_elite()
+            print(self.elite.predict())
             if verbose:
                 self._verbose_reporter()
             del self.neighborhood
