@@ -1,8 +1,11 @@
 from copy import copy
 
-from numpy import append as np_append
-from numpy import ones, where
+from numpy import zeros, ones, empty, empty_like, where, append as np_append
+from scipy.special import xlogy
 from sklearn.linear_model import LinearRegression
+from sklearn.neural_network._base import softmax
+
+from DeepSemanticLearningMachine.non_convolutional.lbfgs import LBFGS
 
 from .common.neural_network_builder import NeuralNetworkBuilder
 from .components.hidden_neuron import HiddenNeuron
@@ -12,8 +15,8 @@ from .components.input_neuron import InputNeuron
 ############################
 #### Mutation operators ####
 ############################
-def mutate_hidden_layers(neural_network, random_state, learning_step, sparseness, maximum_new_neurons_per_layer=3, maximum_neuron_connection_weight=1.0, maximum_bias_weight=1.0,
-                         delta_target=None, global_targets=None, global_preds=None, hidden_activation_functions_ids=None, prob_activation_hidden_layers=None, time_print=False):
+def mutate_hidden_layers(X, y, neural_network, random_state, learning_step, sparseness, maximum_new_neurons_per_layer=3, maximum_neuron_connection_weight=1.0, maximum_bias_weight=1.0,
+                         delta_target=None, global_preds=None, hidden_activation_functions_ids=None, prob_activation_hidden_layers=None, time_print=False):
     """
     Function that changes a given neural network's topology by possibly
     adding neurons on each one of the hidden layers.
@@ -155,12 +158,26 @@ def mutate_hidden_layers(neural_network, random_state, learning_step, sparseness
 
     ls_start_time = timeit.default_timer()
     # Calculate learning step for new neurons added in the last hidden layer:
-    neural_network.calculate_learning_step(learning_step, new_neurons_per_layer[-1], random_state, delta_target, global_targets, global_preds)
+    
+    #===========================================================================
+    # mutation = mutation_ols_ls_margin
+    # mutation = mutation_lbfgs_all_neurons
+    #===========================================================================
+    mutation = mutation_lbfgs_new_neurons
+    mutation(X, y, neural_network, new_neurons_per_layer[-1], random_state)
+    
+    #===========================================================================
+    # mutation = None
+    # neural_network.calculate_learning_step(learning_step, new_neurons_per_layer[-1], random_state, target, delta_target, learning_step_function)
+    #===========================================================================
     ls_time = timeit.default_timer() - ls_start_time
     
     incremental_start_time = timeit.default_timer() 
     # Sum previous semantics to output layer:
-    neural_network.incremental_output_semantics_update(num_last_connections=new_neurons_per_layer[-1])
+    if mutation == mutation_lbfgs_all_neurons:
+        neural_network.calculate_output_semantics()
+    else:
+        neural_network.incremental_output_semantics_update(num_last_connections=new_neurons_per_layer[-1])
     incremental_time = timeit.default_timer() - incremental_start_time
 
     time = timeit.default_timer() - start_time
@@ -204,3 +221,115 @@ def calculate_ols(nn, num_last_neurons, target):
                 output_neuron.input_connections[-num_last_neurons + i].weight = optimal_weights[i]
             
             output_neuron.increment_bias(optimal_weights[-1])
+
+
+def mutation_ols_ls_margin(X, y, nn, n_new_neurons, random_state):
+        
+    n_samples = y.shape[0]
+    hidden_semantics = zeros((n_samples, n_new_neurons))
+    for i, hidden_neuron in enumerate(nn.get_last_n_neurons(n_new_neurons)):
+        hidden_semantics[:, i] = hidden_neuron.get_semantics()
+    
+    y_prob = nn.get_predictions().copy()
+    softmax(y_prob)
+    ce_loss = -xlogy(y, y_prob)
+    m = ce_loss.max(axis=1)
+    # am = ce_loss.argmax(axis=1)
+    
+    sample_weights = 1 + m
+    # sample_weights = ones(n_samples)
+    
+    for output_index, output_neuron in enumerate(nn.output_layer):
+        output_delta_y = y[:, output_index] - nn.get_predictions()[:, output_index]
+        reg = LinearRegression().fit(hidden_semantics, output_delta_y, sample_weights)
+        optimal_weights = np_append(reg.coef_.T, reg.intercept_)
+        # print('\n\toptimal_weights [min, mean, max]: [%.5f, %.5f, %.5f]' % (optimal_weights.min(), optimal_weights.mean(), optimal_weights.max()))
+
+        # Update connections with the learning step value:
+        for i in range(n_new_neurons):
+            output_neuron.input_connections[-n_new_neurons + i].weight = optimal_weights[i]
+        
+        output_neuron.increment_bias(optimal_weights[-1])
+
+
+def mutation_lbfgs_new_neurons(X, y, nn, n_new_neurons, random_state):
+    
+    n_samples = y.shape[0]
+    new_neurons = nn.get_last_n_neurons(n_new_neurons)
+    hidden_semantics = zeros((n_samples, n_new_neurons))
+    for i, hidden_neuron in enumerate(new_neurons):
+        hidden_semantics[:, i] = hidden_neuron.get_semantics()
+    
+    layer_units = [n_new_neurons, y.shape[1]]
+    activations = []
+    activations.extend([hidden_semantics])
+    activations.extend(empty((n_samples, n_fan_out)) for n_fan_out in layer_units[1:])
+    deltas = [empty_like(a_layer) for a_layer in activations]
+    coef_grads = [empty((n_fan_in_, n_fan_out_)) for n_fan_in_, n_fan_out_ in zip(layer_units[:-1], layer_units[1:])]
+    intercept_grads = [empty(n_fan_out_) for n_fan_out_ in layer_units[1:]]
+    
+    solver = LBFGS()
+    
+    """ zero-weight initialization for new neurons """
+    coef_init = zeros((layer_units[0], layer_units[1]))
+    
+    intercept_init = zeros(layer_units[1])
+    for output_index, output_neuron in enumerate(nn.output_layer):
+        intercept_init[output_index] = output_neuron.bias
+    
+    fixed_weighted_input = zeros((n_samples, layer_units[1]))
+    for output_index, output_neuron in enumerate(nn.output_layer):
+        fixed_weighted_input[:, output_index] = output_neuron.get_weighted_input() - output_neuron.bias
+    
+    coefs, intercepts = solver.fit(X, y, activations, deltas, coef_grads, intercept_grads, layer_units, random_state, coef_init=coef_init, intercept_init=intercept_init, fixed_weighted_input=fixed_weighted_input)
+    
+    coefs = coefs[-1]
+    intercepts = intercepts[-1]
+    for output_index, output_neuron in enumerate(nn.output_layer):
+        for i in range(n_new_neurons):
+            # print('coefs[%d, %d] = %.5f\n' % (i, output_index, coefs[i, output_index]))
+            output_neuron.input_connections[-n_new_neurons + i].weight = coefs[i, output_index]
+        
+        # print('intercepts[%d] = %.5f\n' % (output_index, intercepts[output_index]))
+        # output_neuron.bias = intercepts[output_index]
+        output_neuron.increment_bias(intercepts[output_index] - output_neuron.bias)
+
+
+def mutation_lbfgs_all_neurons(X, y, nn, n_new_neurons, random_state):
+    
+    n_samples = y.shape[0]
+    n_neurons = len(nn.hidden_layers[-1])
+    hidden_semantics = zeros((n_samples, n_neurons))
+    for i, hidden_neuron in enumerate(nn.hidden_layers[-1]):
+        hidden_semantics[:, i] = hidden_neuron.get_semantics()
+    
+    layer_units = [n_neurons, y.shape[1]]
+    activations = []
+    activations.extend([hidden_semantics])
+    activations.extend(empty((n_samples, n_fan_out)) for n_fan_out in layer_units[1:])
+    deltas = [empty_like(a_layer) for a_layer in activations]
+    coef_grads = [empty((n_fan_in_, n_fan_out_)) for n_fan_in_, n_fan_out_ in zip(layer_units[:-1], layer_units[1:])]
+    intercept_grads = [empty(n_fan_out_) for n_fan_out_ in layer_units[1:]]
+    
+    """ zero-weight initialization for new neurons """
+    coef_init = zeros((layer_units[0], layer_units[1]))
+    for output_index, output_neuron in enumerate(nn.output_layer):
+        for i, connection in enumerate(output_neuron.input_connections[:-n_new_neurons]):
+            coef_init[i][output_index] = connection.weight
+            # print("i =", i, ", output_index =", output_index, ", weight =", connection.weight)
+    
+    intercept_init = zeros(layer_units[1])
+    for output_index, output_neuron in enumerate(nn.output_layer):
+        intercept_init[output_index] = output_neuron.bias
+    
+    solver = LBFGS()
+    coefs, intercepts = solver.fit(X, y, activations, deltas, coef_grads, intercept_grads, layer_units, random_state, coef_init=coef_init, intercept_init=intercept_init)
+    coefs = coefs[-1]
+    intercepts = intercepts[-1]
+    for output_index, output_neuron in enumerate(nn.output_layer):
+        for i in range(n_neurons):
+            # print('coefs[%d, %d] = %.5f\n' % (i, output_index, coefs[i, output_index]))
+            output_neuron.input_connections[-n_neurons + i].weight = coefs[i, output_index]
+        
+        # print('intercepts[%d] = %.5f\n' % (output_index, intercepts[output_index]))
+        output_neuron.bias = intercepts[output_index]
