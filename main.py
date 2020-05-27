@@ -70,4 +70,3 @@ DSLM.fit(x_train, y_train, validation_data=(x_test, y_test), verbose=True, valid
 
 
 
-"""WARNING: HIGH MEMORY REQUIREMENTS! TESTED ONLY WITH 16GB"""
