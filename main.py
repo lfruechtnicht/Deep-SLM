@@ -61,7 +61,7 @@ y_train = y_train[:1000]
 
 """ TODO: -Lukas main.py """
 DSLM = DeepSLM(RootMeanSquaredError, seed=4, max_depth_cl=10, max_width_cl=1, max_depth_non_conv=4,
-               max_width_non_conv=3, neighbourhood_size=2, layer_parameters=layer_parameters)
+               max_width_non_conv=3, neighbourhood_size=1, layer_parameters=layer_parameters)
 #===============================================================================
 # DSLM = DeepSLM(RootMeanSquaredError, seed=1, max_depth_cl=10, max_width_cl=1, max_depth_non_conv=4,
 #                max_width_non_conv=3, neighbourhood_size=25, layer_parameters=layer_parameters)
