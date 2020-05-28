@@ -57,15 +57,15 @@ class HiddenNeuron(Neuron):
 
     def _calculate_weighted_input(self):
         """Calculates weighted input from input connections."""
-        
+
         instances = self.input_connections[0].from_neuron.semantics.shape[0]
         weighted_input = zeros(instances)
-        
+
         weighted_input += self.bias
-        
+
         for connection in filter(lambda x: x.is_active, self.input_connections):
             weighted_input += connection.get_from_neuron_semantics() * connection.weight
-        
+
         return weighted_input
 
     def _calculate_output(self, weighted_input):
@@ -83,17 +83,17 @@ class HiddenNeuron(Neuron):
 
     def calculate_semantics(self):
         """Calculates semantics after calculating weighted input."""
-        #=======================================================================
+        # =======================================================================
         # print('\t\t\tCalculating semantics for hidden neuron with %d input connections' % (len(self.input_connections)))
-        #=======================================================================
+        # =======================================================================
         weighted_input = self._calculate_weighted_input()
         self.semantics = self._calculate_output(weighted_input)
         weighted_input = None
-    
+
     def free(self):
         self.clean_semantics()
         self.input_connections = None
-    
+
     def add_input_connection(self, new_connection):
         """Receives a new input connection for this neuron.
 

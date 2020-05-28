@@ -52,20 +52,20 @@ class OutputNeuron(Neuron):
 
     def _calculate_weighted_input(self, num_last_connections=None):
         """Calculates weighted input from input connections."""
-        
+
         instances = self.input_connections[-1].from_neuron.semantics.shape[0]
         weighted_input = zeros(instances)
-        
+
         if num_last_connections:
             weighted_input += self.bias_increment
             connections = self.input_connections[-num_last_connections:]
         else:
             weighted_input += self.bias
             connections = self.input_connections
-        
+
         for connection in filter(lambda x: x.is_active, connections):
             weighted_input += connection.get_from_neuron_semantics() * connection.weight
-        
+
         return weighted_input
 
     def _calculate_output(self, weighted_input, clip=False):
@@ -86,7 +86,7 @@ class OutputNeuron(Neuron):
         self.weighted_input = self._calculate_weighted_input()
         self.semantics = self._calculate_output(self.weighted_input)
         return self.semantics
-    
+
     def incremental_semantics_update(self, num_last_connections):
         """Adds a given value to current semantics. This function exists to prevent the need
         to recalculate OutputNeuron's semantics everytime a new input connection is added.
@@ -98,9 +98,9 @@ class OutputNeuron(Neuron):
             the neural network.
         """
         partial_weighted_input = self._calculate_weighted_input(num_last_connections=num_last_connections)
-        
+
         self.weighted_input += partial_weighted_input
-        
+
         self.semantics = self._calculate_output(self.weighted_input)
         return self.semantics
 
@@ -114,7 +114,7 @@ class OutputNeuron(Neuron):
             New semantics.
         """
         self.semantics = semantics.copy()
-    
+
     def override_weighted_input(self, weighted_input):
         """Overrides current neuron's weighted input. Usually, this occurs when a clone
         of the neural network is being created.
@@ -125,7 +125,7 @@ class OutputNeuron(Neuron):
             New weighted input.
         """
         self.weighted_input = weighted_input.copy()
-        
+
     def override_input_connections(self, connections):
         self.input_connections = connections
 
@@ -142,11 +142,11 @@ class OutputNeuron(Neuron):
 
     def get_activation_function_id(self):
         return self.activation_function_id
-    
+
     def increment_bias(self, increment):
         self.bias_increment = increment
         self.bias += increment
-        
+
     def get_weighted_input(self):
         """Returns current weighted input of the output neuron."""
         return self.weighted_input
@@ -155,7 +155,7 @@ class OutputNeuron(Neuron):
         """Resets the semantics and the weighted input."""
         self.semantics = None
         self.weighted_input = None
-    
+
     def free(self):
         self.clean_semantics()
         self.input_connections = None

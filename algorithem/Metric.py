@@ -51,13 +51,13 @@ class Accuracy(Metric):
     @staticmethod
     def evaluate(prediction, target):
         return accuracy_score(target, prediction, normalize=True)
-        
+
         # =======================================================================
         # return accuracy_score(target, where(prediction >= 0.5, True, False))
         # =======================================================================
-        #=======================================================================
+        # =======================================================================
         # return accuracy_score(where(target >= 0.5, True, False), where(prediction >= 0.5, True, False))
-        #=======================================================================
+        # =======================================================================
 
 
 class AUROC(Metric):
@@ -116,8 +116,7 @@ class CCE(Metric):
         return str("LogLoss")
 
     @staticmethod
-    def evaluate(prediction, target, epsilon=1e-12,):
-
+    def evaluate(prediction, target, epsilon=1e-12, ):
         """
         Computes cross entropy between targets (encoded as one-hot vectors)
         and predictions.
@@ -163,7 +162,6 @@ class Accurarcy(Metric):
 
     @staticmethod
     def evaluate(prediction, target):
-
         m = tf.keras.metrics.CategoricalAccuracy()
         m.update_state(y_true=target, y_pred=prediction)
         return m.result().numpy()

@@ -557,6 +557,7 @@ class NeuralNetworkBuilder:
 
         import timeit
         start_time = timeit.default_timer()
+        input_layer = [neuron for neuron in neural_network.input_layer]
 
         # Recreate hidden layers and copy original values:
         hidden_layers = [[neuron for neuron in hidden_layer] for hidden_layer in neural_network.hidden_layers]
@@ -592,7 +593,7 @@ class NeuralNetworkBuilder:
 
             output_layer.append(cloned_output_neuron)
 
-        clone = NeuralNetwork(neural_network.input_layer, hidden_layers, output_layer)
+        clone = NeuralNetwork(input_layer, hidden_layers, output_layer)
         clone.update_parent(neural_network.is_better_than_parent())
         clone.update_loss(neural_network.get_loss())
         clone.override_predictions(neural_network.get_predictions())

@@ -6,6 +6,7 @@ from sklearn.metrics.classification import accuracy_score
 from tensorflow import keras
 
 from DeepSemanticLearningMachine.Node import InputNode, MergeNode, ConvNode, DenseNode, FlattenNode
+from DeepSemanticLearningMachine.non_convolutional.initialization import compute_weights
 import tensorflow as tf
 from tensorflow.keras.models import Model
 from utils import *
@@ -141,7 +142,6 @@ class NeuralNetwork(object):
         return self._copy()
 
     def copy(self):
-        # print("Number of Input_Neurons in NCP: ",len(self.random_ncp.input_layer), " Number of Neurons in the last layer of the cp: ", self.conv_layers[0][-1].output_shape[1])
         return self._copy()
 
     def _copy(self):
@@ -400,7 +400,7 @@ class NeuralNetwork(object):
         self.current_with = 1
         self.get_semantics_mutation_nodes()
 
-    def build_random_ncp(self, feed_original_X=True):
+    def build_random_ncp(self, feed_original_X=False):
 
         input_layer = list()
 
@@ -412,7 +412,6 @@ class NeuralNetwork(object):
                 X = X.reshape((X.shape[0], X.shape[1] * X.shape[2]))
                 for input_data in X.T:
                     input_layer.append(InputNeuron(input_data))
-
 
         else:
             print("Network build based on random conv")
@@ -441,7 +440,11 @@ class NeuralNetwork(object):
                                                               sparseness, hidden_activation_functions_ids,
                                                               prob_activation_hidden_layers)
 
-        calculate_ols(nn, num_last_neurons=nn.get_number_last_hidden_neurons(), target=y)
+        # =======================================================================
+        # calculate_ols(nn, num_last_neurons=nn.get_number_last_hidden_neurons(), target=y)
+        # =======================================================================
+        compute_weights(self.x_train, y, nn, self.random_state)
+
         nn.calculate_output_semantics()
         nn.clean_hidden_semantics()
 
@@ -471,10 +474,19 @@ class NeuralNetwork(object):
         delta_target = y - global_preds
         hidden_activation_functions_ids = ['relu']
         prob_activation_hidden_layers = 1
-        child_nn = mutate_hidden_layers(child_nn, self.random_state, learning_step, sparseness,
-                                        maximum_new_neurons_per_layer, maximum_neuron_connection_weight,
-                                        maximum_bias_weight, delta_target, y, global_preds,
-                                        hidden_activation_functions_ids, prob_activation_hidden_layers)
+        child_nn = mutate_hidden_layers(X=None,
+                                        y=y,
+                                        neural_network=child_nn,
+                                        random_state=self.random_state,
+                                        learning_step=learning_step,
+                                        sparseness=sparseness,
+                                        maximum_new_neurons_per_layer=maximum_new_neurons_per_layer,
+                                        maximum_neuron_connection_weight=maximum_neuron_connection_weight,
+                                        maximum_bias_weight=maximum_bias_weight,
+                                        delta_target=delta_target,
+                                        global_preds=global_preds,
+                                        hidden_activation_functions_ids=hidden_activation_functions_ids,
+                                        prob_activation_hidden_layers=prob_activation_hidden_layers)
 
         child_nn.clean_hidden_semantics()  # todo ask ivo why this mus happen?
 
@@ -511,6 +523,38 @@ class NeuralNetwork(object):
         self.mutate_random_layers(mutate_conv=mutation_point)
         self.semantics = self.output_node.semantics
         self.fitness = self._evaluate()
+        print("Number of Input_Neurons in NCP: ", len(self.random_ncp.input_layer),
+              " Number of Neurons in the last layer of the cp: ",
+              sum([layer[-1].output_shape[1] for layer in self.conv_layers.values() if layer])
+
+              )
+        return self
+
+    def isolated_one_filter_mutation(self):
+        """Mutate the network such that a graph with only one touch-point is added to the network
+        returns the network, adds only one neuron per layer """
+        self.conv_parameters, self.non_conv_parameters = self._set_parameters_one_filter()
+        self.isolated_mutation()
+        return self
+
+    def connected_mutation(self):
+        """Mutate the network such that a graph with only one touch-point is added to the network
+        returns the network, contains more than one neuron per layer """
+        self.mutation_level += 1
+        self.conv_layers[self.mutation_level] = []
+        self.non_conv_layers[self.mutation_level] = []
+        mutation_node = self.random_mutation_node()  # choose a staring node
+        self.build_random_layers(starting_node=mutation_node, concatenation_restricted=False)
+        self.get_semantics_mutation_nodes()
+        self.semantics = self.output_node.semantics
+        self.fitness = self._evaluate()
+        return self
+
+    def connected_one_filter_mutation(self):
+        """Mutate the network such that a graph with only one touch-point is added to the network
+        returns the network, adds only one neuron per layer """
+        self.conv_parameters, self.non_conv_parameters = self._set_parameters_one_filter()
+        self.connected_mutation()
         return self
 
     def get_semantic_inputs(self):

@@ -13,7 +13,7 @@ def check_random_state(seed):
         If seed is an int, return a new RandomState instance seeded with seed.
         If seed is already a RandomState instance, return it.
         Otherwise raise ValueError.
-
+a
     """
 
     if isinstance(seed, (numbers.Integral, np.integer)):
