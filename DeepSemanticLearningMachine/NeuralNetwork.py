@@ -141,7 +141,7 @@ class NeuralNetwork(object):
         return self._copy()
 
     def copy(self):
-        print("Number of Input_Neurons in NCP: ",len(self.random_ncp.input_layer), " Number of Neurons in the last layer of the cp: ", self.conv_layers[0][-1].output_shape[1])
+        # print("Number of Input_Neurons in NCP: ",len(self.random_ncp.input_layer), " Number of Neurons in the last layer of the cp: ", self.conv_layers[0][-1].output_shape[1])
         return self._copy()
 
     def _copy(self):
@@ -400,7 +400,7 @@ class NeuralNetwork(object):
         self.current_with = 1
         self.get_semantics_mutation_nodes()
 
-    def build_random_ncp(self, feed_original_X=False):
+    def build_random_ncp(self, feed_original_X=True):
 
         input_layer = list()
 
@@ -513,33 +513,6 @@ class NeuralNetwork(object):
         self.fitness = self._evaluate()
         return self
 
-    def isolated_one_filter_mutation(self):
-        """Mutate the network such that a graph with only one touch-point is added to the network
-        returns the network, adds only one neuron per layer """
-        self.conv_parameters, self.non_conv_parameters = self._set_parameters_one_filter()
-        self.isolated_mutation()
-        return self
-
-    def connected_mutation(self):
-        """Mutate the network such that a graph with only one touch-point is added to the network
-        returns the network, contains more than one neuron per layer """
-        self.mutation_level += 1
-        self.conv_layers[self.mutation_level] = []
-        self.non_conv_layers[self.mutation_level] = []
-        mutation_node = self.random_mutation_node()  # choose a staring node
-        self.build_random_layers(starting_node=mutation_node, concatenation_restricted=False)
-        self.get_semantics_mutation_nodes()
-        self.semantics = self.output_node.semantics
-        self.fitness = self._evaluate()
-        return self
-
-    def connected_one_filter_mutation(self):
-        """Mutate the network such that a graph with only one touch-point is added to the network
-        returns the network, adds only one neuron per layer """
-        self.conv_parameters, self.non_conv_parameters = self._set_parameters_one_filter()
-        self.connected_mutation()
-        return self
-
     def get_semantic_inputs(self):
         """searches if any node in the current mutation level has inputs from previous semantics and returns a tuple of
         with a list of the semantic inputs resembling a keras.layer.input and the associated data to the input"""
@@ -627,7 +600,8 @@ class NeuralNetwork(object):
                                         target=self.validation_data[1]), self.validation_metric.evaluate(
                 prediction=y_pred, target=self.validation_data[1])
         else:
-            self.get_intermediate_predictions()
+            pass
+            # self.get_intermediate_predictions()
 
     def get_bottleneck_nodes(self):
         """ :returns the computational_layer for the last node in each mutation step"""

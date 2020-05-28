@@ -102,7 +102,7 @@ class DeepSLM(
             self.neighborhood = [self.elite.copy().mutation() for _ in
                                  range(self.neighborhood_size)]
             self.elite = self._get_elite()
-            print(self.elite.predict())
+            # print(self.elite.predict())
             if verbose:
                 self._verbose_reporter()
             del self.neighborhood
