@@ -79,7 +79,8 @@ class NeuralNetwork(object):
                  non_conv_layers=None,
                  validation_data=None,
                  validation_metric=None,
-                 random_ncp=None
+                 random_ncp=None,
+                 use_deep_layers=False
                  ):
 
         self.random_state = check_random_state(seed)
@@ -109,6 +110,7 @@ class NeuralNetwork(object):
         self.semantics_size = semantics_size
         self.fitness = fitness
         self.current_with = 1
+        self.use_deep_layers = use_deep_layers
 
         """ TODO: -Lukas NeuralNetwork __init__ """
         self.random_ncp = random_ncp
@@ -123,20 +125,31 @@ class NeuralNetwork(object):
             self.pre_output_node = {self.mutation_level: None}  # default arguments arguments
             self.initialize_network()
 
+
+
     def __repr__(self):
         """ TODO: -Lukas __repr__ """
-        y_pred_as_labels = self.semantics.argmax(axis=1)
-        y_train_as_labels = self.y_train.argmax(axis=1)
-        print('Global accuracy: %.5f%%' % (accuracy_score(y_train_as_labels, y_pred_as_labels) * 100))
-        if self.random_ncp:
-            pred = self.semantics.clip(0, 1)
-            for i in range(len(self.random_ncp.output_layer)):
-                y_train = self.y_train[:, i]
-                y_pred_train = where(pred[:, i] >= 0.5, 1, 0)
-                print('\tAccuracy for neuron %d: %.5f%%' % (i + 1, accuracy_score(y_train, y_pred_train) * 100))
+        # print("Hello")
+        # self.super_reporter()
+        # if self.random_ncp:
+        #     pred = self.semantics.clip(0, 1)
+        #     for i in range(len(self.random_ncp.output_layer)):
+        #         y_train = self.y_train[:, i]
+        #         y_pred_train = where(pred[:, i] >= 0.5, 1, 0)
+        #         print('\tAccuracy for neuron %d: %.5f%%' % (i + 1, accuracy_score(y_train, y_pred_train) * 100))
 
         return str(f"NeuralNetwork, {self.metric.name}: {self.fitness:.4f}, Mutations: {self.mutation_level}, "
                    f"MemoUsage: {self.semantics_size:.2f}mb")
+
+    def super_reporter(self):
+        y_pred_as_labels = self.semantics.argmax(axis=1)
+        y_train_as_labels = self.y_train.argmax(axis=1)
+        print('Global accuracy: %.5f%%' % (accuracy_score(y_train_as_labels, y_pred_as_labels) * 100))
+        pred = self.semantics.clip(0, 1)
+        for i in range(len(self.random_ncp.output_layer)):
+            y_train = self.y_train[:, i]
+            y_pred_train = where(pred[:, i] >= 0.5, 1, 0)
+            print('\tAccuracy for neuron %d: %.5f%%' % (i + 1, accuracy_score(y_train, y_pred_train) * 100))
 
     def __copy__(self):
         return self._copy()
@@ -174,6 +187,7 @@ class NeuralNetwork(object):
         non_conv_layers = self.non_conv_layers.copy()
         fitness = self.fitness
         random_ncp = NeuralNetworkBuilder.clone_neural_network(self.random_ncp)
+        use_deep_layers = self.use_deep_layers
         return NeuralNetwork(seed=seed,
                              input_shape=input_shape,
                              n_outputs=n_outputs,
@@ -200,7 +214,8 @@ class NeuralNetwork(object):
                              non_conv_layers=non_conv_layers,
                              validation_data=validation_data,
                              validation_metric=validation_metric,
-                             random_ncp=random_ncp)
+                             random_ncp=random_ncp,
+                             use_deep_layers=use_deep_layers)
 
     def summary(self):
         return self.model.summary()
@@ -213,16 +228,16 @@ class NeuralNetwork(object):
         self.fitness = self._evaluate()
 
     def build_random_layers(self):
-        self.build_random_cp()
+        if self.use_deep_layers:
+            self.build_random_cp()
         self.build_random_ncp()
 
     def mutate_random_layers(self, mutate_conv):
-
-        if mutate_conv:
-            self.mutate_random_cp()
-        """ TODO: -Lukas build_random_layers """
+        if self.use_deep_layers:
+            if mutate_conv:
+                self.mutate_random_cp()
+            """ TODO: -Lukas build_random_layers """
         self.mutate_random_ncp(mutate_conv)
-        # self.build_fixed_dense()
 
     def build_random_cp(self):
 
@@ -400,11 +415,12 @@ class NeuralNetwork(object):
         self.current_with = 1
         self.get_semantics_mutation_nodes()
 
-    def build_random_ncp(self, feed_original_X=False):
+    def build_random_ncp(self,):
 
         input_layer = list()
 
-        if feed_original_X:
+        if not self.use_deep_layers:
+            print("Network build based on original data")
             original_X = self.x_train
             channels = original_X.shape[3]
             for i in range(channels):
@@ -413,8 +429,13 @@ class NeuralNetwork(object):
                 for input_data in X.T:
                     input_layer.append(InputNeuron(input_data))
 
+            # data = self.x_train
+            # data = data.T.reshape(data.shape[1] * data.shape[2] * data.shape[3], data.shape[0])
+            # for input_data in data:
+            #     input_layer.append(InputNeuron(input_data))
+
         else:
-            print("Network build based on random conv")
+            print("Network build based on deep layers")
             for input_semantics in self.conv_layers[0][-1].semantics.T:
                 input_layer.append(InputNeuron(input_semantics))
 
@@ -453,11 +474,11 @@ class NeuralNetwork(object):
         self.random_ncp = nn
 
     def mutate_random_ncp(self, mutate_conv):
-        child_nn = NeuralNetworkBuilder.clone_neural_network(self.random_ncp)
 
-        if mutate_conv:
-            for input_semantics in self.conv_layers[self.mutation_level][-1].semantics.T:
-                child_nn.input_layer.append(InputNeuron(input_semantics))
+        if self.use_deep_layers:
+            if mutate_conv:
+                for input_semantics in self.conv_layers[self.mutation_level][-1].semantics.T:
+                    self.random_ncp.input_layer.append(InputNeuron(input_semantics))
 
         learning_step = 'optimized'
         sparseness = {'sparse': True, 'minimum_sparseness': 0.75, 'maximum_sparseness': 1,
@@ -476,7 +497,7 @@ class NeuralNetwork(object):
         prob_activation_hidden_layers = 1
         child_nn = mutate_hidden_layers(X=None,
                                         y=y,
-                                        neural_network=child_nn,
+                                        neural_network=self.random_ncp,
                                         random_state=self.random_state,
                                         learning_step=learning_step,
                                         sparseness=sparseness,
@@ -488,7 +509,7 @@ class NeuralNetwork(object):
                                         hidden_activation_functions_ids=hidden_activation_functions_ids,
                                         prob_activation_hidden_layers=prob_activation_hidden_layers)
 
-        child_nn.clean_hidden_semantics()  # todo ask ivo why this mus happen?
+        child_nn.clean_hidden_semantics()  # todo ask ivo why this must happen?
 
         self.output_node = child_nn
         self.output_node.semantics = self.output_node.get_predictions()
@@ -516,10 +537,11 @@ class NeuralNetwork(object):
     def mutation(self):
         """Mutate the network such that a graph with only one touch-point is added to the network
         returns the network, contains more than one neuron per layer """
-        self.mutation_level += 1
-        self.conv_layers[self.mutation_level] = []
-        self.non_conv_layers[self.mutation_level] = []
-        mutation_point = self.random_state.choice([True, False])  # choose a staring point
+        if self.use_deep_layers:
+            self.mutation_level += 1
+            self.conv_layers[self.mutation_level] = []
+            self.non_conv_layers[self.mutation_level] = []
+        mutation_point = self.random_state.choice([True, False])  # mutate both or only one
         self.mutate_random_layers(mutate_conv=mutation_point)
         self.semantics = self.output_node.semantics
         self.fitness = self._evaluate()
@@ -528,33 +550,6 @@ class NeuralNetwork(object):
               sum([layer[-1].output_shape[1] for layer in self.conv_layers.values() if layer])
 
               )
-        return self
-
-    def isolated_one_filter_mutation(self):
-        """Mutate the network such that a graph with only one touch-point is added to the network
-        returns the network, adds only one neuron per layer """
-        self.conv_parameters, self.non_conv_parameters = self._set_parameters_one_filter()
-        self.isolated_mutation()
-        return self
-
-    def connected_mutation(self):
-        """Mutate the network such that a graph with only one touch-point is added to the network
-        returns the network, contains more than one neuron per layer """
-        self.mutation_level += 1
-        self.conv_layers[self.mutation_level] = []
-        self.non_conv_layers[self.mutation_level] = []
-        mutation_node = self.random_mutation_node()  # choose a staring node
-        self.build_random_layers(starting_node=mutation_node, concatenation_restricted=False)
-        self.get_semantics_mutation_nodes()
-        self.semantics = self.output_node.semantics
-        self.fitness = self._evaluate()
-        return self
-
-    def connected_one_filter_mutation(self):
-        """Mutate the network such that a graph with only one touch-point is added to the network
-        returns the network, adds only one neuron per layer """
-        self.conv_parameters, self.non_conv_parameters = self._set_parameters_one_filter()
-        self.connected_mutation()
         return self
 
     def get_semantic_inputs(self):
@@ -632,24 +627,53 @@ class NeuralNetwork(object):
     def evaluate(self):
         if self.validation_data is None:
             raise ValueError(
-                f"Need to pass Validation data, in the form of [xtest, ytest]. Cant validate on {self.validation_data}")
+                f"Need to pass Validation data, in the form of (xtest, ytest). Cant validate on {self.validation_data}")
+        if self.use_deep_layers:
+            self.get_intermediate_predictions()
+            y_pred = self.random_ncp.generate_predictions(self.bollleneck_predictions)
+            # because the old semantics are now
+            train_semantics = [layer[-1].semantics for layer in self.conv_layers.values() if layer]
+            train_semantics = np.concatenate(train_semantics, axis=1)
+            self.random_ncp.generate_predictions(train_semantics)
 
-        """ TODO: -Lukas evaluate """
-        if self.random_ncp is None:
-            self.set_model()
-            y_pred = self.model.predict(self.validation_data[0])
-            del self.model  # not needed anymore
-            """"evaluates the network on test data"""
-            return self.metric.evaluate(prediction=y_pred,
-                                        target=self.validation_data[1]), self.validation_metric.evaluate(
-                prediction=y_pred, target=self.validation_data[1])
         else:
-            pass
-            # self.get_intermediate_predictions()
+
+            original_X = self.validation_data[0]
+            channels = original_X.shape[3]
+            data = []
+            for i in range(channels):
+                X = original_X[:, :, :, i]
+                X = X.reshape((X.shape[0], X.shape[1] * X.shape[2]))
+                for input_data in X.T:
+                    data.append(input_data)
+
+
+            print("hello")
+
+            input_data_slm = np.stack(data, axis=1)
+            y_pred = self.random_ncp.generate_predictions(input_data_slm)
+            print(y_pred.shape)
+
+            original_X = self.x_train
+            channels = original_X.shape[3]
+            data = []
+            for i in range(channels):
+                X = original_X[:, :, :, i]
+                X = X.reshape((X.shape[0], X.shape[1] * X.shape[2]))
+                for input_data in X.T:
+                    data.append(input_data)
+
+            print("hello")
+
+            input_data_slm = np.stack(data, axis=1)
+            print(input_data_slm.shape)
+            self.random_ncp.generate_predictions(input_data_slm)
+
+        return self.validation_metric.name, self.validation_metric.evaluate(prediction=y_pred.clip(0, 1), target=self.validation_data[1])
+
 
     def get_bottleneck_nodes(self):
         """ :returns the computational_layer for the last node in each mutation step"""
-        print(type(self.conv_layers.values()))
         return [nodes[-1].computational_layer for nodes in self.conv_layers.values() if nodes]
 
     def get_intermediate_predictions(self, X=None):
@@ -657,12 +681,19 @@ class NeuralNetwork(object):
         bottleneck_nodes = self.get_bottleneck_nodes()
         model_for_predictions = Model(inputs=self.initial_input_node.computational_layer, outputs=bottleneck_nodes)
 
+        print()
         if X:
             self.bollleneck_predictions = model_for_predictions.predict(X)
         else:
-            self.bollleneck_predictions = model_for_predictions.predict(self.validation_data[0])
+            predictions = model_for_predictions.predict(self.validation_data[0])
+            if len(bottleneck_nodes) > 1:
+                predictions = np.concatenate(predictions, axis=1)
+            print(predictions.shape)
+            self.bollleneck_predictions = predictions
+
 
     def predict(self, X=None):
+        # todo self.use_deep_layers
         self.get_intermediate_predictions(X=X)
         y_pred = self.random_ncp.generate_predictions(X=self.bollleneck_predictions)
         return y_pred
@@ -672,19 +703,6 @@ class NeuralNetwork(object):
         _conv_parameters = [[1], kernel_sizes, strides, padding, activations]
         _non_conv_parameters = [[1], activations]
         return list(product(*_conv_parameters)), list(product(*_non_conv_parameters))
-
-
-def mutation_map(NN):
-    """Mutate the network such that a graph with only one touch-point is added to the network
-    returns the network, contains more than one neuron per layer """
-    NN.mutation_level += 1
-    NN.conv_layers[NN.mutation_level] = []
-    NN.non_conv_layers[NN.mutation_level] = []
-    mutation_point = NN.random_state.choice([True, False])  # choose a staring point
-    NN.mutate_random_layers(mutate_conv=mutation_point)
-    NN.semantics = NN.output_node.semantics
-    NN.fitness = NN._evaluate()
-    return NN
 
 
 if __name__ == '__main__':

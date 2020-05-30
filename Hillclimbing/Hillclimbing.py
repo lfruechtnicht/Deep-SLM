@@ -17,16 +17,20 @@ class Hillclimbing():  # todo ABC META
         return self.elite.predict(data)
 
     def _verbose_reporter(self):
-        print(f"Generation: {self.current_generation}, {str(self.elite)}")
-        if self.current_generation % 5 == 0 and self.current_generation != 0:
+        if self.current_generation % 2 == 0 and self.current_generation != 0:
             print("====================   ===================")
             print(f"Generation: {self.current_generation}, {str(self.elite)}, "
                   f"Validation Fitness: {self.elite.evaluate()}")
+            self.elite.super_reporter()
+        else:
+            print(f"Generation: {self.current_generation}, {str(self.elite)}")
+            self.elite.super_reporter()
+
 
     def _get_elite(self):
 
         self.neighborhood.sort(key=lambda x: x.fitness,
-                               reverse=self.metric.greater_is_better)  # could do argmax or arg min
+                               reverse=self.metric.greater_is_better)  # todo do np.argmax or arg min
 
         """ TODO: -Lukas _get_elite """
         if self.neighborhood[0].fitness > self.elite.fitness:
@@ -41,7 +45,7 @@ class Hillclimbing():  # todo ABC META
             print()
 
         """ TODO: -Lukas _get_elite, the best child is always kept """
-        new_elite = self.neighborhood[0]  # todo - IVO why would you change the elite if the child is acutally worse?
+        new_elite = self.neighborhood[0]
 
         # =======================================================================
         # if _is_better(self.neighborhood[0].fitness, self.elite.fitness, self.metric):

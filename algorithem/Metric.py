@@ -104,9 +104,10 @@ class BinaryCrossEntropy(Metric):
         return log_loss(target, y_pred_prob)
 
 
-class CCE(Metric):
+class LogLoss(Metric):
+
     greater_is_better = False
-    name = "CCE"
+    name = "LogLoss"
     type = "classification"
 
     def __repr__(self):
@@ -116,18 +117,11 @@ class CCE(Metric):
         return str("LogLoss")
 
     @staticmethod
-    def evaluate(prediction, target, epsilon=1e-12, ):
-        """
-        Computes cross entropy between targets (encoded as one-hot vectors)
-        and predictions.
-        Input: predictions (N, k) ndarray
-               targets (N, k) ndarray
-        Returns: scalar
-        """
-        predictions = np.clip(prediction, epsilon, 1. - epsilon)
-        N = predictions.shape[0]
-        ce = -np.sum(target * np.log(predictions + 1e-9)) / N
-        return ce
+    def evaluate(prediction, target):
+        cce = tf.keras.losses.CategoricalCrossentropy()
+        print(prediction.shape, target.shape)
+        return cce(target, prediction).numpy()
+
 
 
 class MSE(Metric):

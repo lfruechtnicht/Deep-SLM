@@ -12,7 +12,6 @@ from algorithem.Metric import *
 
 (x_train, y_train), (x_test, y_test) = cifar10.load_data()
 num_classes = 10
-num_predictions = 20
 
 y_train = keras.utils.to_categorical(y_train, num_classes)
 y_test = keras.utils.to_categorical(y_test, num_classes)
@@ -37,7 +36,7 @@ strides = [(3, 3),
            (2, 2),
            (1, 1)
            ]
-filters = list(range(1, 3))
+filters = list(range(1, 10))
 kernel_size = [(5, 5),
                (3, 3),
                (1, 1)
@@ -55,19 +54,16 @@ layer_parameters = {"filters": filters,
                     "activations": activations,
                     "pool_size": pool_size,
                     "neurons": neurons}
-
-x_train = x_train[:1000]
-y_train = y_train[:1000]
+#
+# x_train = x_train[:100]
+# y_train = y_train[:100]
 
 """ TODO: -Lukas main.py """
-DSLM = DeepSLM(CCE, seed=4, max_depth_cl=10, max_width_cl=1, max_depth_non_conv=4,
-               max_width_non_conv=3, neighbourhood_size=2, layer_parameters=layer_parameters)
+DSLM = DeepSLM(LogLoss, seed=1, max_depth_cl=4, max_width_cl=1, max_depth_non_conv=4,
+               max_width_non_conv=3, neighbourhood_size=1, layer_parameters=layer_parameters)
 #===============================================================================
 # DSLM = DeepSLM(RootMeanSquaredError, seed=1, max_depth_cl=10, max_width_cl=1, max_depth_non_conv=4,
 #                max_width_non_conv=3, neighbourhood_size=25, layer_parameters=layer_parameters)
 #===============================================================================
-DSLM.fit(x_train, y_train, validation_data=(x_test, y_test), verbose=True, validation_metric=Accurarcy)  # todo validation true false
+DSLM.fit(x_train, y_train, validation_data=(x_test, y_test), verbose=True, validation_metric=LogLoss)
 
-
-
-"""WARNING: HIGH MEMORY REQUIREMENTS! TESTED ONLY WITH 16GB"""

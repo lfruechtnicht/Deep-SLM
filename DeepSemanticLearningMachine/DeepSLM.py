@@ -1,11 +1,11 @@
 from Hillclimbing.Hillclimbing import Hillclimbing
 from DeepSemanticLearningMachine.NeuralNetwork import NeuralNetwork
-
+from algorithem.Metric import LogLoss
 import numpy as np
-from algorithem.Metric import new_elite, CCE
 import gc
 from itertools import combinations_with_replacement, product
-
+import csv
+import pandas as pd
 
 class DeepSLM(
     Hillclimbing):  # todo only for classification for now it should become abstract to also be for non image datasets
@@ -28,7 +28,7 @@ class DeepSLM(
     """
 
     def __init__(self,  # todo fix memory being used even tough not needed!
-                 metric=CCE,
+                 metric=LogLoss,
                  seed=None,  # todo add semantic stopping criterion
                  neighbourhood_size=10,  # todo add other mutations
                  stopping_criterion=None,  # todo add evolution of dense layers
@@ -37,7 +37,9 @@ class DeepSLM(
                  max_depth_non_conv=3,
                  max_width_non_conv=1,
                  max_splits=3,
-                 layer_parameters=None):
+                 layer_parameters=None,
+                 max_generations=100
+                 ):
 
         super().__init__(metric=metric,
                          seed=seed,
@@ -50,6 +52,7 @@ class DeepSLM(
         self.max_width_non_conv = max_width_non_conv
         self.max_splits = max_splits
         self.layer_parameters = layer_parameters
+        self.max_generations = max_generations
         self.conv_parameters, self.pool_parameters, self.non_conv_parameters = self._set_parameters()
 
     def fit(self, x_train, y_train, validation_data=None, verbose=False, validation_metric=None):
@@ -69,6 +72,7 @@ class DeepSLM(
         self._evolve(verbose, x_train, y_train, validation_data, n_outputs, validation_metric)
 
     def _evolve(self, verbose, x_train, y_train, validation_data, n_outputs, validation_metric):
+        history = pd.DataFrame()
 
         self.neighborhood = [NeuralNetwork(metric=self.metric,
                                            x_train=x_train,
@@ -90,23 +94,26 @@ class DeepSLM(
                                            ) for _ in range(self.neighborhood_size)]
         self.neighborhood = sorted(self.neighborhood, key=lambda x: x.fitness,
                                    reverse=self.metric.greater_is_better)  # argmax
-        print("test")
         self.elite = self.neighborhood[0]
+        history = history.append({'Generation': int(0), 'Loss': self.elite.fitness}, ignore_index=True)
         if verbose:
             self._verbose_reporter()
         del self.neighborhood
         gc.collect()
 
-        for generation in range(100):
+        for generation in range(1, self.max_generations):
             self.current_generation += 1
             self.neighborhood = [self.elite.copy().mutation() for _ in
                                  range(self.neighborhood_size)]
             self.elite = self._get_elite()
-            # print(self.elite.predict())
+            history = history.append({'Generation': int(generation), 'Loss': self.elite.fitness}, ignore_index=True)
             if verbose:
                 self._verbose_reporter()
             del self.neighborhood
             gc.collect()
+            history.to_csv("training_only.csv")
+
+
 
     def _set_parameters(self):
         filters, kernel_sizes, strides, padding, activations, pool_size, neurons = self.layer_parameters.values()
